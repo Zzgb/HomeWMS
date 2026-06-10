@@ -113,4 +113,6 @@ src/
 
 ## License
 
-MIT
+本软件仅供个人非商业使用。禁止任何形式的商业用途（包括但不限于销售、租赁、SaaS 服务、商业部署）。详见 [LICENSE](./LICENSE) 文件。
+
+This software is for personal, non-commercial use only. Any commercial use is prohibited.

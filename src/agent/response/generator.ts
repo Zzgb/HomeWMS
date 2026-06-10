@@ -1,40 +1,29 @@
-import { streamText, stepCountIs, type ModelMessage } from "ai";
+import { streamText } from "ai";
 import { getModel } from "@/agent/router";
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { ResponseInput } from "./types";
 
-export interface ExecuteInput {
-  prisma: PrismaClient;
-  modelId: string;
-  system: string;
-  /** Phase 1: no context — forces tool calls */
-  phase1Messages: ModelMessage[];
-  /** Phase 2: full context — for comparison and rhetoric after tool results */
-  phase2Messages: ModelMessage[];
-  tools: Record<string, any>;
-  aiName: string;
-  onToolResult?: (info: { toolName: string; args: unknown; success?: boolean; message?: string }) => void;
-  onUsage?: (tokens: number) => void;
-}
+export async function generateResponse(input: ResponseInput) {
+  const {
+    modelId,
+    system,
+    userMessage,
+    contextMessages,
+    tools,
+    aiName,
+    prisma,
+    onUsage,
+  } = input;
 
-export async function executeStream(input: ExecuteInput) {
-  const { prisma, modelId, system, phase1Messages, phase2Messages, tools, aiName, onToolResult, onUsage } = input;
+  // User message first, then context
+  const messages = [userMessage, ...contextMessages];
 
   const result = streamText({
     model: getModel(modelId),
     system,
-    messages: phase1Messages,
+    messages,
     tools,
-    stopWhen: stepCountIs(8),
     maxRetries: 2,
     abortSignal: AbortSignal.timeout(60_000),
-    prepareStep: async ({ stepNumber }) => {
-      // Step 1: no context (forces tool calls)
-      // Step 2+: inject context for comparison with DB results
-      if (stepNumber > 1) {
-        return { messages: phase2Messages };
-      }
-      return {};
-    },
     onFinish: async ({ text, steps, usage }) => {
       const stepCount = steps?.length ?? 0;
       const totalToolCalls =
@@ -46,7 +35,7 @@ export async function executeStream(input: ExecuteInput) {
 
       if (totalToolCalls === 0 && text && text.length > 0) {
         console.warn(
-          `[Agent] WARNING: No tool calls. Response: ${text.slice(0, 200)}`
+          `[Agent] WARNING: No tool calls in response phase. Response: ${text.slice(0, 200)}`
         );
       }
 
@@ -57,14 +46,12 @@ export async function executeStream(input: ExecuteInput) {
         );
         return (s.toolCalls || []).map((tc: any) => {
           const tr: any = resultsByCallId.get(tc.toolCallId);
-          const info = {
+          return {
             toolName: tc.toolName,
             args: tc.args,
             success: tr?.result?.success,
             message: tr?.result?.message,
           };
-          onToolResult?.(info);
-          return info;
         });
       }) || [];
 

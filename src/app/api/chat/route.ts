@@ -1,5 +1,4 @@
-import { assembleContext } from "@/agent/context";
-import { executeStream } from "@/agent/execute";
+import { runAgent } from "@/agent";
 import { maybeSummarize } from "@/agent/summarizer";
 import { createToolDefinitions } from "@/tools";
 import { getPrisma } from "@/lib/prisma";
@@ -44,68 +43,44 @@ export async function POST(req: Request) {
       if (lastWithName?.aiName) aiName = lastWithName.aiName;
     } catch {}
 
-    // ── Save user message ──
+    // ── Extract user message text ──
     const lastUserMsg = messages[messages.length - 1];
-    if (lastUserMsg?.role === "user") {
-      try {
-        const { messageService } = await import("@/services/message.service");
-        const userText =
-          typeof lastUserMsg.content === "string"
-            ? lastUserMsg.content
-            : lastUserMsg.parts
-                ?.filter((p: any) => p.type === "text")
-                .map((p: any) => p.text)
-                .join("") || "(empty)";
-        await messageService.saveMessage(prisma, "user", userText, undefined, undefined, aiName);
-      } catch (e) {
-        console.error("Failed to save user message:", e);
-      }
+    const userText =
+      typeof lastUserMsg?.content === "string"
+        ? lastUserMsg.content
+        : lastUserMsg?.parts
+            ?.filter((p: any) => p.type === "text")
+            .map((p: any) => p.text)
+            .join("") || "";
+
+    if (!userText.trim()) {
+      return Response.json({ error: "Empty message" }, { status: 400 });
     }
 
-    // ── Context ──
-    const ctx = await assembleContext(
+    // ── Save user message ──
+    try {
+      const { messageService } = await import("@/services/message.service");
+      await messageService.saveMessage(prisma, "user", userText, undefined, undefined, aiName);
+    } catch (e) {
+      console.error("Failed to save user message:", e);
+    }
+
+    // ── Tool definitions ──
+    const tools = createToolDefinitions(prisma);
+
+    // ── Run agent (4 layers) ──
+    const { stream, intent, toolResults, conflicts } = await runAgent({
       prisma,
-      cfg?.name || storeId,
-      memorySize,
+      modelId,
+      userMessage: userText,
+      language: language || "zh",
+      warehouseName: cfg?.name || storeId,
       aiName,
-      storeId,
-      contextMode,
-      summaryCount,
-      language
-    );
-
-    // Convert client messages + dedup
-    const clientModelMessages = messages.map((m: any) => ({
-      role: m.role as "user" | "assistant",
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : m.parts
-              ?.filter((p: any) => p.type === "text")
-              .map((p: any) => p.text)
-              .join("") || "",
-    }));
-
-    // ── Build two-phase messages ──
-    const clientIds = new Set(messages.map((m: any) => m.id).filter(Boolean));
-    const filteredDbMessages = ctx.messages.filter((m: any) => !clientIds.has(m.id));
-    const combined = [...filteredDbMessages, ...clientModelMessages];
-    const contextMessages = combined.length > memorySize
-      ? combined.slice(-memorySize)
-      : combined;
-
-    // Phase 1: NO context — forces model to call tools
-    const phase1Messages = [
-      ...clientModelMessages.slice(-2),
-      { role: "system" as const, content: "Call findItem NOW. Get real database data. Do NOT use memory or guess." },
-    ];
-
-    // Phase 2: WITH context — for comparison and rhetoric after tool results
-    const phase2Messages = [
-      { role: "system" as const, content: "⬇️ REFERENCE CONTEXT — may be wrong. Compare with DB results above. DB wins if conflict." },
-      ...contextMessages,
-      { role: "system" as const, content: "⬆️ Compare DB results with context. Generate final response using verified DB data. If context contradicts DB, note the correction." },
-    ];
+      memorySize,
+      contextMode: contextMode as "recent" | "summary" | "hybrid",
+      summaryCount: summaryCount || 3,
+      tools,
+    });
 
     // ── Debug log ──
     if (debugMode) {
@@ -113,30 +88,32 @@ export async function POST(req: Request) {
         await prisma.log.create({
           data: {
             action: "debug",
-            note: `Context debug | mode=${contextMode} memorySize=${memorySize} phase1=${phase1Messages.length} phase2=${phase2Messages.length}\n${JSON.stringify({ config: { contextMode, memorySize }, system: ctx.system.slice(0, 2000), phase2: phase2Messages.map((m: any, i: number) => ({ idx: i, role: m.role, content: (m.content || "").slice(0, 300) })) }, null, 2)}`,
+            note: JSON.stringify({
+              intent,
+              toolResults: toolResults.map((tr) => ({
+                toolName: tr.toolName,
+                args: tr.args,
+                success: tr.success,
+              })),
+              conflicts: conflicts.map((c) => ({
+                itemName: c.itemName,
+                field: c.field,
+                dbValue: c.dbValue,
+                contextValue: c.contextValue,
+              })),
+              config: { contextMode, memorySize, modelId },
+            }, null, 2),
           },
         });
       } catch {}
     }
 
-    // ── Execute ──
-    const tools = createToolDefinitions(prisma);
-    const result = await executeStream({
-      prisma,
-      modelId,
-      system: ctx.system,
-      phase1Messages,
-      phase2Messages,
-      tools,
-      aiName,
-    });
-
-    // ── Summarize ──
+    // ── Summarize (fire and forget) ──
     maybeSummarize(prisma, { enabled: summaryEnabled, threshold: summaryThreshold }).catch(
       console.error
     );
 
-    return result.toUIMessageStreamResponse();
+    return stream.toUIMessageStreamResponse();
   } catch (error: any) {
     console.error("Chat error:", error);
     return Response.json(

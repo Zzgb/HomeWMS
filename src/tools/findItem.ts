@@ -35,9 +35,28 @@ export function makeFindItemTool(prisma: PrismaClient) {
           items = allItems.filter((i) => i.name.toLowerCase() === resolved.toLowerCase());
         }
 
-        // If LLM resolution failed, return ALL items — let caller figure it out
+        // LLM resolution failed — keyword doesn't match any item. Return failure with available items.
         if (items.length === 0) {
-          items = allItems;
+          const now = new Date();
+          return {
+            found: false,
+            success: false,
+            keyword: k,
+            message: `❌ "${k}" 不在仓库中。当前物品: ${allItems.map(i => i.name).join(", ")}`,
+            items: allItems.map((item) => ({
+              name: item.name,
+              category: item.category,
+              stocks: item.stocks.map((s) => {
+                const isExpiredByDate = s.status === "normal" && s.expiryDate && s.expiryDate < now;
+                return {
+                  spot: s.spot.name,
+                  qty: s.qty,
+                  status: isExpiredByDate ? "expired" : s.status,
+                  expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
+                };
+              }),
+            })),
+          };
         }
       }
 

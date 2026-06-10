@@ -53,15 +53,30 @@ export async function assembleContext(
 
   // Inject tool results as context
   if (toolResults.length > 0) {
-    const resultSummary = toolResults
-      .filter((r) => r.success)
-      .map((r) => `[${r.toolName}] ${JSON.stringify(r.result).slice(0, 1000)}`)
-      .join("\n");
-    contextMessages.unshift({
-      role: "system",
-      content: `✅ Verified DB Results (authoritative):\n${resultSummary}`,
-      id: undefined,
-    } as any);
+    const successResults = toolResults.filter((r) => r.success);
+    const failedResults = toolResults.filter((r) => !r.success);
+
+    if (successResults.length > 0) {
+      const summary = successResults
+        .map((r) => `[${r.toolName}] ${JSON.stringify(r.result).slice(0, 1000)}`)
+        .join("\n");
+      contextMessages.unshift({
+        role: "system",
+        content: `✅ Verified DB Results (authoritative):\n${summary}`,
+        id: undefined,
+      } as any);
+    }
+
+    if (failedResults.length > 0) {
+      const errors = failedResults
+        .map((r) => `[${r.toolName}] ${(r.result as any)?.message || "Unknown error"}`)
+        .join("\n");
+      contextMessages.unshift({
+        role: "system",
+        content: `❌ Failed Operations:\n${errors}\n\nTell the user what went wrong. Use the available items from the failed result to suggest alternatives.`,
+        id: undefined,
+      } as any);
+    }
   }
 
   // Wrap context

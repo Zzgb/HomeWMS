@@ -30,7 +30,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Search, Package, AlertTriangle, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
@@ -644,7 +643,13 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create-expiry">保质期（可选）</Label>
-                <DatePicker value={createExpiry} onChange={setCreateExpiry} placeholder="选择日期" />
+                <input
+                  key={`create-date-${createOpen}`}
+                  type="date"
+                  defaultValue=""
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  onChange={(e) => setCreateExpiry(e.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -744,7 +749,13 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="stock-expiry">保质期</Label>
-              <DatePicker value={editStockExpiry} onChange={setEditStockExpiry} placeholder="选择日期" />
+              <input
+                key={`stock-date-${editStockOpen}`}
+                type="date"
+                defaultValue=""
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                onChange={(e) => setEditStockExpiry(e.target.value)}
+              />
               <p className="text-xs text-muted-foreground">可选，留空表示无保质期限制</p>
             </div>
           </div>

@@ -1,6 +1,7 @@
 # HomeWMS — AI 驱动的个人仓库管理系统
 
 用自然语言和 AI 对话来管理家里的物品库存。支持多仓库、独立数据库、AI 智能识别分类与保质期。
+https://github.com/user-attachments/assets/0822e136-a825-4c23-be1e-91fc9949dbbb
 
 ## 功能亮点
 

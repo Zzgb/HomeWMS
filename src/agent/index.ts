@@ -41,12 +41,12 @@ export async function runAgent(input: ChatInput) {
   const intent = await classifyIntent(userMessage, language, modelId);
   console.log(`[Agent:L1] Intent: ${intent.type}${intent.type === "mutate" ? ` ${(intent as any).action} ${(intent as any).keyword}` : ""}`);
 
-  // ── Layer 2: Execute tools (skip for chat/unknown) ──
+  // ── Layer 2: Execute tools (skip only for pure chat) ──
   let toolResults: ToolResult[] = [];
-  if (intent.type !== "chat" && intent.type !== "unknown") {
+  if (intent.type !== "chat") {
     const plan = buildPlan(intent);
     console.log(`[Agent:L2] Plan: ${plan.map((s) => s.toolName).join(" → ")}`);
-    const result = await executePlan(tools, plan);
+    const result = await executePlan(tools, plan, modelId);
     toolResults = result.toolResults;
     console.log(
       `[Agent:L2] Results: ${toolResults.map((r) => `${r.toolName}=${r.success ? "✅" : "❌"}`).join(", ")}`

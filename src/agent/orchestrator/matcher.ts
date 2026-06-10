@@ -102,7 +102,6 @@ export function buildPlan(intent: Intent): CallStep[] {
       ];
 
     case "chat":
-    case "unknown":
       return [];
   }
 }

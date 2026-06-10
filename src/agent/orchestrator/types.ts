@@ -16,6 +16,7 @@ export interface OrchestratorOutput {
   toolResults: ToolResult[];
   success: boolean;
   errorMessage?: string;
+  fallback?: boolean;   // findItem returned no exact match — defer to Layer 4
 }
 
 export interface CallStep {

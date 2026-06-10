@@ -45,6 +45,8 @@ export function makeFindItemTool(prisma: PrismaClient) {
         found: true,
         keyword: k,
         total: items.length,
+        success: !fallback,          // false when fallback — signals orchestrator to stop
+        fallback: fallback || undefined,
         note: fallback ? `No exact match for "${k}". Showing ALL items — use the exact name from this list.` : undefined,
         items: items.map((item) => ({
           name: item.name,

@@ -92,9 +92,11 @@ export default function InventoryPage() {
   const [checkOpen, setCheckOpen] = useState(false);
   const [filterKeyword, setFilterKeyword] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterDays, setFilterDays] = useState("");
   const [dialogKeyword, setDialogKeyword] = useState("");
   const [dialogStatus, setDialogStatus] = useState("");
-  const hasActiveFilter = !!(filterKeyword || filterStatus);
+  const [dialogDays, setDialogDays] = useState("");
+  const hasActiveFilter = !!(filterKeyword || filterStatus || filterDays);
 
   // Create item dialog
   const [createOpen, setCreateOpen] = useState(false);
@@ -382,6 +384,14 @@ export default function InventoryPage() {
       if (filterStatus === "damaged" && item.status !== "damaged") return false;
       if (filterStatus === "normal" && (item.status !== "normal" || isExpiredByDate)) return false;
     }
+    if (filterDays) {
+      const days = Number(filterDays);
+      if (days > 0) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        if (new Date(item.updatedAt) >= cutoff) return false;
+      }
+    }
     return true;
   });
 
@@ -431,7 +441,7 @@ export default function InventoryPage() {
             新增物品
           </Button>
           <Dialog open={checkOpen} onOpenChange={(open) => {
-            if (open) { setDialogKeyword(filterKeyword); setDialogStatus(filterStatus); }
+            if (open) { setDialogKeyword(filterKeyword); setDialogStatus(filterStatus); setDialogDays(filterDays); }
             setCheckOpen(open);
           }}>
             <DialogTrigger className={cn(
@@ -463,16 +473,22 @@ export default function InventoryPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter-days">未更新天数</Label>
+                  <Input id="filter-days" type="number" placeholder="不填则不过滤" value={dialogDays} onChange={(e) => setDialogDays(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">只显示超过该天数未更新的物品。</p>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => {
-                  setFilterKeyword(""); setFilterStatus(""); setDialogKeyword(""); setDialogStatus("");
+                  setFilterKeyword(""); setFilterStatus(""); setFilterDays("");
+                  setDialogKeyword(""); setDialogStatus(""); setDialogDays("");
                   setCheckOpen(false);
                 }}>
                   清除筛选
                 </Button>
                 <Button onClick={() => {
-                  setFilterKeyword(dialogKeyword); setFilterStatus(dialogStatus);
+                  setFilterKeyword(dialogKeyword); setFilterStatus(dialogStatus); setFilterDays(dialogDays);
                   setCheckOpen(false);
                 }}>
                   应用
@@ -626,8 +642,8 @@ export default function InventoryPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-expiry">保质期</Label>
-                <Input id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} />
+                <Label htmlFor="create-expiry">保质期（可选）</Label>
+                <Input id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} autoComplete="off" />
               </div>
             </div>
             <div className="space-y-2">

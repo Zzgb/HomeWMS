@@ -117,10 +117,17 @@
 input[type="date"] {
   color-scheme: light;
   cursor: pointer;
+  min-width: 0;
+  padding-right: 0.5rem;
 }
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  opacity: 0.6;
+  opacity: 0.5;
+  padding: 0;
+  margin-left: 0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.8;
 }
 .dark input[type="date"] {
   color-scheme: dark;

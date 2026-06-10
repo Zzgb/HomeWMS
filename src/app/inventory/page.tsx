@@ -30,6 +30,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Search, Package, AlertTriangle, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
@@ -643,7 +644,7 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create-expiry">保质期（可选）</Label>
-                <Input id="create-expiry" placeholder="YYYY-MM-DD" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} />
+                <DatePicker value={createExpiry} onChange={setCreateExpiry} placeholder="选择日期" />
               </div>
             </div>
             <div className="space-y-2">
@@ -743,7 +744,7 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="stock-expiry">保质期</Label>
-              <Input id="stock-expiry" placeholder="YYYY-MM-DD" value={editStockExpiry} onChange={(e) => setEditStockExpiry(e.target.value)} />
+              <DatePicker value={editStockExpiry} onChange={setEditStockExpiry} placeholder="选择日期" />
               <p className="text-xs text-muted-foreground">可选，留空表示无保质期限制</p>
             </div>
           </div>

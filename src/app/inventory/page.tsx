@@ -106,7 +106,8 @@ export default function InventoryPage() {
   const [createQty, setCreateQty] = useState("");
   const [createSpot, setCreateSpot] = useState("");
   const [createStatus, setCreateStatus] = useState("normal");
-  const [createExpiry, setCreateExpiry] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  const [createExpiry, setCreateExpiry] = useState(today);
   const [createSaving, setCreateSaving] = useState(false);
 
   // Edit item dialog
@@ -122,7 +123,7 @@ export default function InventoryPage() {
   const [editingStock, setEditingStock] = useState<StockItem | null>(null);
   const [editStockQty, setEditStockQty] = useState(0);
   const [editStockStatus, setEditStockStatus] = useState("normal");
-  const [editStockExpiry, setEditStockExpiry] = useState("");
+  const [editStockExpiry, setEditStockExpiry] = useState(today);
   const [editStockSaving, setEditStockSaving] = useState(false);
 
   // Delete dialog
@@ -207,7 +208,7 @@ export default function InventoryPage() {
             qty,
             spotId: createSpot.trim(),
             status: createStatus,
-            expiryDate: createExpiry || null,
+            expiryDate: createExpiry === today ? null : (createExpiry || null),
           }),
         });
       }
@@ -219,7 +220,7 @@ export default function InventoryPage() {
       setCreateQty("");
       setCreateSpot("");
       setCreateStatus("normal");
-      setCreateExpiry("");
+      setCreateExpiry(today);
       fetchInventory();
     } catch (err: any) {
       alert(err.message || "创建物品失败");
@@ -269,7 +270,7 @@ export default function InventoryPage() {
     setEditingStock(item);
     setEditStockQty(item.qty);
     setEditStockStatus(item.status);
-    setEditStockExpiry(item.expiryDate ? item.expiryDate.slice(0, 10) : "");
+    setEditStockExpiry(item.expiryDate ? item.expiryDate.slice(0, 10) : today);
     setEditStockOpen(true);
   };
 
@@ -285,7 +286,7 @@ export default function InventoryPage() {
           id: editingStock.id,
           qty: editStockQty,
           status: editStockStatus,
-          expiryDate: editStockExpiry || null,
+          expiryDate: editStockExpiry === today ? null : (editStockExpiry || null),
         }),
       });
       const data = await res.json();
@@ -433,7 +434,7 @@ export default function InventoryPage() {
             size="sm"
             onClick={() => {
               setCreateName(""); setCreateCategory(""); setCreateDesc("");
-              setCreateQty(""); setCreateSpot(""); setCreateStatus("normal"); setCreateExpiry("");
+              setCreateQty(""); setCreateSpot(""); setCreateStatus("normal"); setCreateExpiry(today);
               setCreateOpen(true);
             }}
           >
@@ -756,7 +757,7 @@ export default function InventoryPage() {
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 onChange={(e) => setEditStockExpiry(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">可选，留空表示无保质期限制</p>
+              <p className="text-xs text-muted-foreground">默认日期或修改为T日表示无保质期限制</p>
             </div>
           </div>
           <DialogFooter>

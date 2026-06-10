@@ -46,7 +46,7 @@ export async function runAgent(input: ChatInput) {
   if (intent.type !== "chat") {
     const plan = buildPlan(intent);
     console.log(`[Agent:L2] Plan: ${plan.map((s) => s.toolName).join(" → ")}`);
-    const result = await executePlan(tools, plan, modelId);
+    const result = await executePlan(tools, plan);
     toolResults = result.toolResults;
     console.log(
       `[Agent:L2] Results: ${toolResults.map((r) => `${r.toolName}=${r.success ? "✅" : "❌"}`).join(", ")}`

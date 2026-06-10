@@ -40,8 +40,11 @@ export function makeStockInTool(prisma: PrismaClient) {
         .describe("Item condition. Use 'damaged' for broken/spoiled items, 'expired' for known-expired items. Default is 'normal'."),
     }),
     execute: async ({ itemName, qty, spot, note, expiryDate, category, status }) => {
-      const result = await inventoryService.stockIn(prisma, itemName, qty, spot, note, expiryDate, category, status);
-      return result;
+      try {
+        return await inventoryService.stockIn(prisma, itemName, qty, spot, note, expiryDate, category, status);
+      } catch (e: any) {
+        return { success: false, message: `入库失败: ${e.message || "未知错误"}` };
+      }
     },
   });
 }

@@ -27,8 +27,11 @@ export function makeConsumeItemTool(prisma: PrismaClient) {
         .describe("Optional note about this consumption (e.g., reason, recipient)."),
     }),
     execute: async ({ itemName, qty, spot, note }) => {
-      const result = await inventoryService.consumeItem(prisma, itemName, qty, spot, note);
-      return result;
+      try {
+        return await inventoryService.consumeItem(prisma, itemName, qty, spot, note);
+      } catch (e: any) {
+        return { success: false, message: `出库失败: ${e.message || "未知错误"}` };
+      }
     },
   });
 }

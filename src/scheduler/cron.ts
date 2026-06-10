@@ -26,6 +26,10 @@ function scheduleTask(id: string, cronExpr: string, warehouseId: string, type: s
           unusedCount: result.unusedItems.length,
           damagedCount: result.damagedItems.length,
         });
+      } else if (type === "expiry_check") {
+        const { inventoryService } = await import("@/services/inventory.service");
+        const result = await inventoryService.updateExpiryStatus(prisma);
+        console.log(`Expiry check for warehouse ${warehouseId}: ${result.updated} stocks marked expired`);
       }
     } catch (error) {
       console.error(`Task ${id} failed:`, error);

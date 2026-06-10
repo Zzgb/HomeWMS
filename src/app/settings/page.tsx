@@ -121,7 +121,10 @@ const LANGUAGE_OPTIONS = [
   { value: "ja", label: "日本語" },
 ];
 
-const TASK_TYPES = [{ value: "check_stock", label: "自动盘点" }];
+const TASK_TYPES = [
+  { value: "check_stock", label: "自动盘点" },
+  { value: "expiry_check", label: "保质期检查" },
+];
 
 export default function SettingsPage() {
   const [stores, setStores] = useState<Store[]>([]);

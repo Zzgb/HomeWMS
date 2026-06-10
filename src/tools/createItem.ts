@@ -22,8 +22,11 @@ export function makeCreateItemTool(prisma: PrismaClient) {
         .describe("Optional category to group this item under (e.g., 'tools', 'food', 'electronics')."),
     }),
     execute: async ({ name, desc, category }) => {
-      const result = await inventoryService.createItem(prisma, name, desc, category);
-      return result;
+      try {
+        return await inventoryService.createItem(prisma, name, desc, category);
+      } catch (e: any) {
+        return { success: false, message: `创建物品失败: ${e.message || "未知错误"}` };
+      }
     },
   });
 }

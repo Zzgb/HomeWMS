@@ -286,11 +286,9 @@ export default function ChatPage() {
                       )}
                       {msg.role === "user" ? "你" : ((msg as any).aiName || "小鞠")}
                     </Badge>
-                    {(msg as any).createdAt && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date((msg as any).createdAt).toLocaleString("zh-CN")}
-                      </span>
-                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date((msg as any).createdAt || Date.now()).toLocaleString("zh-CN")}
+                    </span>
                   </div>
 
                   {/* Text content */}

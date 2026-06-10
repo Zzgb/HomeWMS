@@ -95,13 +95,21 @@ export async function POST(req: Request) {
       tools: toolDefinitions,
       stopWhen: stepCountIs(5),
       onFinish: async ({ text, steps, usage }) => {
-        // Collect tool calls from all steps for the log
-        const toolCalls = steps?.flatMap((s: any) =>
-          s.toolCalls?.map((tc: any) => ({
-            toolName: tc.toolName,
-            args: tc.args,
-          })) || []
-        ) || [];
+        // Collect tool calls with results from all steps
+        const toolCalls = steps?.flatMap((s: any) => {
+          const resultsByCallId = new Map(
+            (s.toolResults || []).map((tr: any) => [tr.toolCallId, tr])
+          );
+          return (s.toolCalls || []).map((tc: any) => {
+            const tr: any = resultsByCallId.get(tc.toolCallId);
+            return {
+              toolName: tc.toolName,
+              args: tc.args,
+              success: tr?.result?.success,
+              message: tr?.result?.message,
+            };
+          });
+        }) || [];
 
         // Re-read aiName from DB — if setAiName ran, it already wrote the new name
         let effectiveAiName = aiName;

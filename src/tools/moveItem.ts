@@ -27,14 +27,11 @@ export function makeMoveItemTool(prisma: PrismaClient) {
         .describe("The quantity to move (must be a positive integer)."),
     }),
     execute: async ({ itemName, fromSpot, toSpot, qty }) => {
-      const result = await inventoryService.moveItem(
-        prisma,
-        itemName,
-        fromSpot,
-        toSpot,
-        qty,
-      );
-      return result;
+      try {
+        return await inventoryService.moveItem(prisma, itemName, fromSpot, toSpot, qty);
+      } catch (e: any) {
+        return { success: false, message: `移动失败: ${e.message || "未知错误"}` };
+      }
     },
   });
 }

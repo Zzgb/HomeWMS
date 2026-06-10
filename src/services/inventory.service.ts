@@ -90,10 +90,25 @@ export const inventoryService = {
         },
       });
 
+      // Verify: re-query stock to confirm actual state
+      const verifiedStock = await tx.stock.findUnique({
+        where: { itemId_spotId: { itemId: item.id, spotId: spot.id } },
+        include: { item: true, spot: true },
+      });
+
       return {
         success: true,
         message: `Added ${qty} ${itemName} to ${spotName}. Total: ${stock.qty}`,
         logId: log.id,
+        verified: verifiedStock
+          ? {
+              itemName: verifiedStock.item.name,
+              spotName: verifiedStock.spot.name,
+              qty: verifiedStock.qty,
+              status: verifiedStock.status,
+              expiryDate: verifiedStock.expiryDate?.toISOString().slice(0, 10) ?? null,
+            }
+          : null,
       };
     });
   },
@@ -163,10 +178,24 @@ export const inventoryService = {
         },
       });
 
+      // Verify: re-query to confirm remaining or deletion
+      const verifiedStock = await tx.stock.findUnique({
+        where: { itemId_spotId: { itemId: item.id, spotId: spot.id } },
+        include: { item: true, spot: true },
+      });
+
       return {
         success: true,
         message: `Removed ${qty} ${itemName} from ${spotName}.${newQty > 0 ? ` Remaining: ${newQty}` : " Stock cleared."}`,
         logId: log.id,
+        verified: verifiedStock
+          ? {
+              itemName: verifiedStock.item.name,
+              spotName: verifiedStock.spot.name,
+              remaining: verifiedStock.qty,
+              status: verifiedStock.status,
+            }
+          : { remaining: 0, deleted: true },
       };
     });
   },
@@ -250,10 +279,24 @@ export const inventoryService = {
         },
       });
 
+      // Verify: re-query both source and target
+      const verifiedSource = await tx.stock.findUnique({
+        where: { itemId_spotId: { itemId: item.id, spotId: fromSpot.id } },
+      });
+      const verifiedTarget = await tx.stock.findUnique({
+        where: { itemId_spotId: { itemId: item.id, spotId: toSpot.id } },
+      });
+
       return {
         success: true,
         message: `Moved ${qty} ${itemName} from ${fromSpotName} to ${toSpotName}.`,
         logId: log.id,
+        verified: {
+          source: verifiedSource
+            ? { spotName: fromSpotName, remaining: verifiedSource.qty }
+            : { spotName: fromSpotName, remaining: 0, cleared: true },
+          target: { spotName: toSpotName, qty: verifiedTarget?.qty ?? 0 },
+        },
       };
     });
   },
@@ -351,10 +394,14 @@ export const inventoryService = {
       },
     });
 
+    // Verify item exists
+    const verified = await prisma.item.findUnique({ where: { id: item.id } });
+
     return {
       success: true,
       message: `Created new item: ${name}`,
       itemId: item.id,
+      verified: verified ? { name: verified.name, category: verified.category } : null,
     };
   },
 
@@ -386,16 +433,25 @@ export const inventoryService = {
       const item = await tx.item.findUnique({ where: { id } });
       if (!item) return { success: false, message: "Item not found." };
 
+      const itemName = item.name;
+
       await tx.log.create({
         data: {
           action: "adjust",
-          note: `Item deleted: ${item.name} (id: ${id})`,
+          note: `Item deleted: ${itemName} (id: ${id})`,
         },
       });
 
       await tx.item.delete({ where: { id } });
 
-      return { success: true, message: `Deleted item: ${item.name}` };
+      // Verify deletion
+      const check = await tx.item.findUnique({ where: { id } });
+
+      return {
+        success: true,
+        message: `Deleted item: ${itemName}`,
+        verified: { deleted: check === null },
+      };
     });
   },
 
@@ -418,7 +474,13 @@ export const inventoryService = {
             note: `Stock deleted (qty set to 0): ${stock.item.name} @ ${stock.spot.name}`,
           },
         });
-        return { success: true, message: `Deleted stock: ${stock.item.name} @ ${stock.spot.name} (qty set to 0)` };
+        // Verify deletion
+        const check = await tx.stock.findUnique({ where: { id } });
+        return {
+          success: true,
+          message: `Deleted stock: ${stock.item.name} @ ${stock.spot.name}`,
+          verified: { deleted: check === null },
+        };
       }
 
       const updateData: Record<string, unknown> = {};
@@ -442,7 +504,25 @@ export const inventoryService = {
         },
       });
 
-      return { success: true, message: `Updated stock: ${stock.item.name} @ ${stock.spot.name}` };
+      // Verify: re-query to confirm new values
+      const verifiedStock = await tx.stock.findUnique({
+        where: { id },
+        include: { item: true, spot: true },
+      });
+
+      return {
+        success: true,
+        message: `Updated stock: ${stock.item.name} @ ${stock.spot.name}`,
+        verified: verifiedStock
+          ? {
+              itemName: verifiedStock.item.name,
+              spotName: verifiedStock.spot.name,
+              qty: verifiedStock.qty,
+              status: verifiedStock.status,
+              expiryDate: verifiedStock.expiryDate?.toISOString().slice(0, 10) ?? null,
+            }
+          : null,
+      };
     });
   },
 
@@ -451,17 +531,62 @@ export const inventoryService = {
       const stock = await tx.stock.findUnique({ where: { id }, include: { item: true, spot: true } });
       if (!stock) return { success: false, message: "Stock not found." };
 
+      const stockInfo = `${stock.item.name} x${stock.qty} @ ${stock.spot.name}`;
+
       await tx.log.create({
         data: {
           itemId: stock.itemId,
           action: "adjust",
-          note: `Stock deleted: ${stock.item.name} x${stock.qty} @ ${stock.spot.name}`,
+          note: `Stock deleted: ${stockInfo}`,
         },
       });
 
       await tx.stock.delete({ where: { id } });
 
-      return { success: true, message: `Deleted stock: ${stock.item.name} @ ${stock.spot.name}` };
+      // Verify deletion
+      const check = await tx.stock.findUnique({ where: { id } });
+
+      return {
+        success: true,
+        message: `Deleted stock: ${stockInfo}`,
+        verified: { deleted: check === null },
+      };
     });
+  },
+
+  async updateExpiryStatus(prisma: PrismaClient) {
+    const now = new Date();
+
+    // Find all normal stocks with past expiry date
+    const expired = await prisma.stock.findMany({
+      where: {
+        expiryDate: { lt: now },
+        status: "normal",
+        qty: { gt: 0 },
+      },
+      include: { item: true, spot: true },
+    });
+
+    if (expired.length === 0) return { updated: 0 };
+
+    // Bulk update status to expired
+    const ids = expired.map((s) => s.id);
+    await prisma.stock.updateMany({
+      where: { id: { in: ids } },
+      data: { status: "expired" },
+    });
+
+    // Write logs
+    for (const s of expired) {
+      await prisma.log.create({
+        data: {
+          itemId: s.itemId,
+          action: "expire",
+          note: `Expired by date: ${s.item.name} x${s.qty} @ ${s.spot.name} (expiry: ${s.expiryDate?.toISOString().slice(0, 10)})`,
+        },
+      });
+    }
+
+    return { updated: expired.length };
   },
 };

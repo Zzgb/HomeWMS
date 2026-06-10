@@ -31,6 +31,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const action = searchParams.get("action") || "check_stock";
+
+    if (action === "expiry_check") {
+      const results = await inventoryService.updateExpiryStatus(prisma);
+      return NextResponse.json(results);
+    }
+
     const results = await inventoryService.checkStock(prisma);
     return NextResponse.json(results);
   } catch (error) {

@@ -121,18 +121,19 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
     });
     clientCache.set(warehouseId, client);
 
-    // Fix old schema on first connection (fire-and-forget, non-blocking)
+    // Fix old schema on first connection (separate pool to avoid lock contention)
     if (!schemaFixed.has(warehouseId)) {
       schemaFixed.add(warehouseId);
+      const fixPool = new Pool({ connectionString: url, max: 1 });
       Promise.all([
-        client.$executeRawUnsafe(`ALTER TABLE "Log" DROP COLUMN IF EXISTS "storeId"`),
-        client.$executeRawUnsafe(`ALTER TABLE "Message" DROP COLUMN IF EXISTS "storeId"`),
-        client.$executeRawUnsafe(`ALTER TABLE "Summary" DROP COLUMN IF EXISTS "storeId"`),
-        client.$executeRawUnsafe(`ALTER TABLE "Item" DROP COLUMN IF EXISTS "storeId"`),
-        client.$executeRawUnsafe(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`),
-        client.$executeRawUnsafe(`ALTER TABLE "Stock" ADD COLUMN IF NOT EXISTS "expiryDate" TIMESTAMP(3)`),
-        client.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "aiName" TEXT`),
-      ]).catch(() => {});
+        fixPool.query(`ALTER TABLE "Log" DROP COLUMN IF EXISTS "storeId"`),
+        fixPool.query(`ALTER TABLE "Message" DROP COLUMN IF EXISTS "storeId"`),
+        fixPool.query(`ALTER TABLE "Summary" DROP COLUMN IF EXISTS "storeId"`),
+        fixPool.query(`ALTER TABLE "Item" DROP COLUMN IF EXISTS "storeId"`),
+        fixPool.query(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`),
+        fixPool.query(`ALTER TABLE "Stock" ADD COLUMN IF NOT EXISTS "expiryDate" TIMESTAMP(3)`),
+        fixPool.query(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "aiName" TEXT`),
+      ]).catch(() => {}).finally(() => fixPool.end());
     }
 
     return client;

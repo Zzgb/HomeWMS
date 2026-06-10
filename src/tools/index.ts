@@ -8,6 +8,8 @@ import { makeConsumeItemTool } from "./consumeItem";
 import { makeMoveItemTool } from "./moveItem";
 import { makeCheckStockTool } from "./checkStock";
 import { makeSetAiNameTool } from "./setAiName";
+import { makeDeleteItemTool } from "./deleteItem";
+import { makeUpdateStockTool } from "./updateStock";
 
 /**
  * Creates the full set of inventory-management tool definitions
@@ -25,5 +27,7 @@ export function createToolDefinitions(prisma: PrismaClient) {
     moveItem: makeMoveItemTool(prisma),
     checkStock: makeCheckStockTool(prisma),
     setAiName: makeSetAiNameTool(prisma),
+    deleteItem: makeDeleteItemTool(prisma),
+    updateStock: makeUpdateStockTool(prisma),
   };
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWarehouseConfig, updateWarehouse } from "@/lib/connections";
+import { SYSTEM_PROMPT } from "@/lib/prompts";
 
 export async function GET(
   _request: NextRequest,
@@ -20,7 +21,7 @@ export async function GET(
     return NextResponse.json({
       modelId: config.modelId || "",
       memorySize: config.memorySize || 200,
-      customPrompt: config.customPrompt || "",
+      customPrompt: config.customPrompt || SYSTEM_PROMPT,
     });
   } catch (error) {
     console.error("GET /api/settings/[storeId] error:", error);

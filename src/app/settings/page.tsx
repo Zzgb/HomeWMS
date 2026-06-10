@@ -668,7 +668,7 @@ export default function SettingsPage() {
                       id="custom-prompt"
                       rows={6}
                       className="flex w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="留空则使用默认提示词..."
+                      placeholder="加载中..."
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                     />

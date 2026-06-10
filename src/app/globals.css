@@ -114,23 +114,29 @@
   border-color: var(--border);
 }
 
-input[type="date"] {
-  color-scheme: light;
-  cursor: pointer;
-  min-width: 0;
-  padding-right: 0.5rem;
-}
-input[type="date"]::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.5;
-  padding: 0;
-  margin-left: 0;
-}
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.8;
-}
-.dark input[type="date"] {
-  color-scheme: dark;
+@layer base {
+  input[type="date"] {
+    color-scheme: light;
+    cursor: pointer;
+    min-width: 0;
+    padding-right: 0.25rem;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    padding: 0;
+    margin-left: 0;
+    filter: invert(0.4);
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 0.9;
+  }
+  .dark input[type="date"] {
+    color-scheme: dark;
+  }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
 }
 
 body {

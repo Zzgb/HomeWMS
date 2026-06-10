@@ -41,6 +41,8 @@ export default function ChatPage() {
   const [aiName, setAiName] = useState("小鞠");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Cache fallback timestamps per message id so they don't bounce during streaming re-renders
+  const fallbackTimestamps = useRef<Map<string, Date>>(new Map());
 
   // Load stores and read activeStoreId from localStorage
   useEffect(() => {
@@ -121,9 +123,8 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Re-fetch latest aiName after each conversation completes
-  // (real-time useChat messages don't carry aiName, only history API does)
-  // Uses delay to avoid race with onFinish DB write
+  // After each turn completes, reload history to get DB timestamps
+  // useChat streaming messages lack createdAt — this fills them in
   const prevStatusRef = useRef(status);
   useEffect(() => {
     if (!storeId) return;
@@ -132,12 +133,20 @@ export default function ChatPage() {
     if (!wasLoading || status !== "ready") return;
 
     const timer = setTimeout(() => {
-      fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=1`)
+      fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=200`)
         .then((res) => res.json())
         .then((data) => {
           if (data.messages?.length > 0) {
-            const m = data.messages[0];
-            if (m.aiName) setAiName(m.aiName);
+            setMessages(data.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              createdAt: m.createdAt,
+              aiName: m.aiName,
+              parts: [{ type: "text", text: m.content || "" }],
+            })));
+            const lastAssistant = [...data.messages].reverse().find((m: any) => m.role === "assistant" && m.aiName);
+            if (lastAssistant?.aiName) setAiName(lastAssistant.aiName);
           }
         })
         .catch(() => {});
@@ -292,7 +301,15 @@ export default function ChatPage() {
                       {msg.role === "user" ? "你" : ((msg as any).aiName || "小鞠")}
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date((msg as any).createdAt || Date.now()).toLocaleString("zh-CN")}
+                      {(() => {
+                        const createdAt = (msg as any).createdAt;
+                        if (createdAt) return new Date(createdAt).toLocaleString("zh-CN");
+                        // Stable fallback: cache first-seen timestamp per message id
+                        if (!fallbackTimestamps.current.has(msg.id)) {
+                          fallbackTimestamps.current.set(msg.id, new Date());
+                        }
+                        return fallbackTimestamps.current.get(msg.id)!.toLocaleString("zh-CN");
+                      })()}
                     </span>
                   </div>
 

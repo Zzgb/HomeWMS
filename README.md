@@ -1,83 +1,116 @@
 # HomeWMS — AI 驱动的个人仓库管理系统
 
-## 架构
+用自然语言和 AI 对话来管理家里的物品库存。支持多仓库、独立数据库、AI 智能识别分类与保质期。
 
+## 功能亮点
+
+- **自然语言对话** — 和 AI 助手「小鞠」聊天即可完成入库、出库、盘点、移动等操作
+- **多仓库支持** — 每个仓库独立 PostgreSQL 数据库，数据完全隔离
+- **AI 工具调用** — 9 个工具自动执行库存操作，支持多步调用，结果经 AI 格式化回复
+- **智能分类识别** — 入库时 AI 自动推断物品分类（食品/工具/电子/日用品/药品）
+- **保质期追踪** — 自动识别变质/过期状态，按日期计算过期
+- **操作日志** — 所有 AI 操作完整记录，支持筛选查询
+- **定时任务** — 支持 cron 表达式定时自动盘点
+- **多 LLM 支持** — DeepSeek / OpenAI / Claude / Gemini / OpenRouter 自由切换
+
+## 技术栈
+
+| 层 | 技术 |
+|---|------|
+| 框架 | Next.js 15 (App Router) |
+| 语言 | TypeScript |
+| 样式 | TailwindCSS v4 + shadcn/ui |
+| 数据库 | PostgreSQL + Prisma 7 (PG adapter) |
+| AI | Vercel AI SDK v6 (`streamText` + `tool`) |
+| 调度 | node-cron |
+| 部署 | Vercel / Docker / 自托管 |
+
+## 快速开始
+
+### 前置条件
+
+- Node.js 20+
+- pnpm
+- PostgreSQL（本地或远程均可）
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/your-username/homewms.git
+cd homewms
 ```
-用户 → 聊天 UI → LLM Router → Agent → Tool → Service → PostgreSQL
+
+### 2. 安装依赖
+
+```bash
+pnpm install
 ```
 
-### 技术栈
-Next.js 15 + TypeScript + TailwindCSS v4 + shadcn/ui + PostgreSQL + Prisma 7 + Vercel AI SDK v6 + node-cron
+### 3. 配置环境变量
 
-### 目录
+创建 `.env` 文件：
+
+```env
+# 至少配置一个 LLM API Key
+DEEPSEEK_API_KEY=sk-your-key
+# OPENAI_API_KEY=sk-your-key
+# ANTHROPIC_API_KEY=sk-your-key
+# GOOGLE_GENERATIVE_AI_API_KEY=your-key
+# OPENROUTER_API_KEY=sk-your-key
+
+# 定时任务密钥
+CRON_SECRET=your-random-secret
+```
+
+### 4. 启动开发服务器
+
+```bash
+pnpm dev
+```
+
+打开 `http://localhost:3000`，进入设置页添加你的 PostgreSQL 数据库连接即可开始使用。
+
+## 项目结构
+
 ```
 src/
-├── app/api/chat/       # 核心对话 + 历史
-├── app/api/inventory/  # 库存 + 盘点
-├── app/api/logs/       # 操作日志
-├── app/api/stores/     # 仓库 CRUD + 测试连接
-├── app/api/settings/   # 模型/记忆配置
-├── app/api/tasks/      # 定时任务
-├── lib/connections.ts  # 多仓库连接管理(warehouses.json)
-├── lib/prompts.ts      # AI 提示词
-├── lib/i18n.tsx        # 多语言(zh/en/ja)
-├── services/           # Prisma 查询封装
-├── tools/              # AI 工具(8个,工厂模式)
-├── agent/router.ts     # LLM 路由(5厂商)
-├── agent/context.ts    # 上下文组装
-├── agent/summarizer.ts # 摘要压缩
-└── scheduler/cron.ts   # 定时调度器
+├── app/
+│   ├── api/chat/       # AI 对话 API
+│   ├── api/inventory/  # 库存 CRUD + 盘点
+│   ├── api/logs/       # 操作日志查询
+│   ├── api/stores/     # 仓库连接管理
+│   ├── api/settings/   # 模型/记忆配置
+│   ├── api/tasks/      # 定时任务管理
+│   ├── chat/           # 聊天页面
+│   ├── inventory/      # 库存管理页面
+│   ├── logs/           # 操作日志页面
+│   └── settings/       # 设置页面
+├── agent/              # LLM 路由 + 上下文组装 + 摘要
+├── tools/              # AI 工具（9 个）
+├── services/           # 数据库操作封装
+├── scheduler/          # 定时任务调度
+├── lib/                # 配置管理、提示词、多语言
+└── components/         # UI 组件
 ```
 
-### 配置
-- `.env` — LLM API Key + CRON_SECRET
-- `warehouses.json` — 仓库连接 + 模型/记忆设置
+## 支持的 AI 工具
 
-### 数据库(每仓库独立 PG)
-Item / Spot(树) / Stock / Log(全部操作) / Message(聊天) / Summary(英文摘要) / Task(定时)
+| 工具 | 功能 |
+|------|------|
+| `findItem` | 模糊搜索物品 |
+| `stockIn` | 入库（自动创建物品和位置） |
+| `consumeItem` | 出库 |
+| `moveItem` | 移动物品 |
+| `checkStock` | 盘点（长期未使用 + 损坏/过期） |
+| `getSpots` | 查看仓库位置树 |
+| `createItem` | 手动创建物品 |
+| `listStores` | 列出所有仓库 |
+| `setAiName` | 给 AI 助手改名 |
 
----
+## 多仓库架构
 
-## 上下文与记忆
+每个仓库对应一个独立的 PostgreSQL 数据库连接，配置保存在项目根目录的 `warehouses.json` 中。添加仓库时系统自动建表并执行 Schema 迁移。
 
-```
-用户消息 → 存 Message 表
-→ assembleContext(): 系统提示词 + 仓库名 + 最新3条Summary + 最近N条Message
-→ streamText({ tools, stopWhen: stepCountIs(5) })
-→ AI调用工具 → 写Log → 生成中文回复
-→ 存AI回复到Message(含toolCalls) → maybeSummarize(每50条触发)
-```
+## License
 
-- **摘要**: 只压工具操作对话,英文,50条阈触发,存 Summary 表
-- **短期上下文**: memorySize(默认200), 存在仓库 DB 的 Message 表
-- **切换仓库**: 加载新仓库全量聊天记录
-
----
-
-## 完成状态
-
-### ✅ 已完成
-- 多仓库连接(warehouses.json) + DataGrip 表单
-- AI 对话(DeepSeek/OpenAI/Claude/Gemini/OpenRouter)
-- 8 个工具(findItem/stockIn/consumeItem/moveItem/checkStock/getSpots/createItem/listStores)
-- 聊天记录持久化(保存+加载+时间戳)
-- 库存表格 + 盘点对话框
-- 操作日志(全部AI操作:查询/入库/出库/移动/盘点)
-- 设置页(模型/仓库/记忆/任务/语言)
-- 多语言框架(Nav 支持 zh/en/ja)
-- 小鞠人格 + 反幻觉规则
-- stepCountIs(5) 多步调用
-- 仓库选择器 + 过期ID清理
-- 库存页 CRUD（新增/编辑/删除物品+库存，API POST/PUT/DELETE）
-- 保质期追踪（Stock.expiryDate，stockIn 工具+手动表单均支持，自动过期检测）
-- AI 名称替代"助手"（Message.aiName，设置页配置，提示词注入，改名同步历史消息）
-- 聊天标题（{AI名} AI 替代仓库名）
-- UI 现代化（全站玻璃效果 backdrop-blur，输入框 44→80px）
-- 用户消息气泡空白修复（w-fit + max-w-[70%]）
-
-### ❌ 待办
-
-- [ ] 定时盘点结果输出到聊天页（需改 scheduler → 写入 Message）
-- [ ] 摘要压缩开关/频率 + 上下文联想来源设置
-- [ ] 语言切换完整翻译（当前仅 Nav）
-- [ ] initSchema 兼容更多旧表场景
+MIT

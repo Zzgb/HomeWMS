@@ -42,7 +42,7 @@ export async function assembleContext(
     system = `## YOUR CURRENT NAME: ${aiName}\nThis value comes from the database. If the user asks to rename you, call setAiName.\n\n` + system;
   }
   system += `\n\nCurrent warehouse: ${warehouseName}`;
-  system += `\nToday's date: ${today} (use this to determine if expiry dates are in the past)`;
+  system += `\n\nToday's date: ${today}. To check if an item is expired: if expiryDate string < "${today}", it IS expired (compare as strings, YYYY-MM-DD format sorts correctly).`;
 
   // Convert to ModelMessage format
   const messages: ModelMessage[] = recentMessages.map((msg) => ({

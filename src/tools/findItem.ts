@@ -34,6 +34,7 @@ export function makeFindItemTool(prisma: PrismaClient) {
         };
       }
 
+      const now = new Date();
       return {
         found: true,
         keyword: k,
@@ -41,12 +42,15 @@ export function makeFindItemTool(prisma: PrismaClient) {
         items: items.map((item) => ({
           name: item.name,
           category: item.category,
-          stocks: item.stocks.map((s) => ({
-            spot: s.spot.name,
-            qty: s.qty,
-            status: s.status,
-            expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
-          })),
+          stocks: item.stocks.map((s) => {
+            const isExpiredByDate = s.status === "normal" && s.expiryDate && s.expiryDate < now;
+            return {
+              spot: s.spot.name,
+              qty: s.qty,
+              status: isExpiredByDate ? "expired" : s.status,
+              expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
+            };
+          }),
         })),
       };
     },

@@ -32,7 +32,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Search, AlertTriangle, Package, Plus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Search, AlertTriangle, Package, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
 interface Store {
   id: string;
@@ -105,15 +105,24 @@ export default function InventoryPage() {
   // Stock check dialog
   const [checkOpen, setCheckOpen] = useState(false);
   const [unusedDaysThreshold, setUnusedDaysThreshold] = useState(30);
+  const [unusedDaysInput, setUnusedDaysInput] = useState("30");
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkResults, setCheckResults] = useState<CheckResults | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
+
+  // Client-side table filters
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   // Create item dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createCategory, setCreateCategory] = useState("");
   const [createDesc, setCreateDesc] = useState("");
+  const [createQty, setCreateQty] = useState("");
+  const [createSpot, setCreateSpot] = useState("");
+  const [createStatus, setCreateStatus] = useState("normal");
+  const [createExpiry, setCreateExpiry] = useState("");
   const [createSaving, setCreateSaving] = useState(false);
 
   // Edit item dialog
@@ -191,6 +200,9 @@ export default function InventoryPage() {
 
   const handleCheck = useCallback(async () => {
     if (!storeId) return;
+    const days = Number(unusedDaysInput) || 0;
+    if (days < 1) { setUnusedDaysInput("1"); return; }
+    setUnusedDaysThreshold(days);
     setCheckLoading(true);
     setCheckError(null);
     setCheckResults(null);
@@ -199,7 +211,7 @@ export default function InventoryPage() {
       const res = await fetch("/api/inventory/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storeId, unusedDaysThreshold }),
+        body: JSON.stringify({ storeId, unusedDaysThreshold: days }),
       });
       if (!res.ok) throw new Error("Stock check failed");
       const data: CheckResults = await res.json();
@@ -209,7 +221,7 @@ export default function InventoryPage() {
     } finally {
       setCheckLoading(false);
     }
-  }, [storeId, unusedDaysThreshold]);
+  }, [storeId, unusedDaysInput]);
 
   // Create item
   const handleCreateItem = async () => {
@@ -223,10 +235,32 @@ export default function InventoryPage() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "创建失败");
+
+      // If qty and spot provided, also create initial stock
+      const qty = Number(createQty) || 0;
+      if (qty > 0 && createSpot.trim()) {
+        await fetch("/api/inventory", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId,
+            id: data.itemId,
+            qty,
+            spotId: createSpot.trim(),
+            status: createStatus,
+            expiryDate: createExpiry || null,
+          }),
+        });
+      }
+
       setCreateOpen(false);
       setCreateName("");
       setCreateCategory("");
       setCreateDesc("");
+      setCreateQty("");
+      setCreateSpot("");
+      setCreateStatus("normal");
+      setCreateExpiry("");
       fetchInventory();
     } catch (err: any) {
       alert(err.message || "创建物品失败");
@@ -382,6 +416,19 @@ export default function InventoryPage() {
 
   const currentStore = stores.find((s) => s.id === storeId);
 
+  // Client-side filtered inventory
+  const filteredInventory = inventory.filter((item) => {
+    if (filterKeyword && !item.item.name.toLowerCase().includes(filterKeyword.toLowerCase())) return false;
+    if (filterStatus && item.status !== filterStatus) {
+      // Also check computed expiry status
+      const isExpired = item.status === "normal" && item.expiryDate && new Date(item.expiryDate) < new Date();
+      if (filterStatus === "expired" && !isExpired) return false;
+      if (filterStatus !== "expired" && isExpired) return false;
+      if (filterStatus !== "expired") return false;
+    }
+    return true;
+  });
+
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
       {/* Header */}
@@ -409,14 +456,18 @@ export default function InventoryPage() {
               </SelectContent>
             </Select>
           )}
+          {/* Refresh button */}
+                  {/* Refresh */}
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fetchInventory} disabled={loadingInventory}>
+            <RefreshCw className={cn("h-4 w-4", loadingInventory && "animate-spin")} />
+          </Button>
           {/* New item button */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              setCreateName("");
-              setCreateCategory("");
-              setCreateDesc("");
+              setCreateName(""); setCreateCategory(""); setCreateDesc("");
+              setCreateQty(""); setCreateSpot(""); setCreateStatus("normal"); setCreateExpiry("");
               setCreateOpen(true);
             }}
           >
@@ -426,30 +477,44 @@ export default function InventoryPage() {
           <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
             <DialogTrigger className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground">
               <Search className="h-4 w-4 mr-1.5" />
-              盘点
+              筛选
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>库存盘点</DialogTitle>
+                <DialogTitle>库存筛选与盘点</DialogTitle>
                 <DialogDescription>
-                  找出长期未使用的物品，并检查损坏/过期库存。
+                  按条件过滤库存列表，或执行盘点找出长期未更新及损坏/过期物品。
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
+                {/* Client-side filters */}
                 <div className="space-y-2">
-                  <Label htmlFor="unused-days">未使用天数阈值</Label>
+                  <Label htmlFor="filter-keyword">物品名称</Label>
+                  <Input id="filter-keyword" placeholder="输入关键字过滤..." value={filterKeyword} onChange={(e) => setFilterKeyword(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="filter-status">状态</Label>
+                  <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as string)}>
+                    <SelectTrigger id="filter-status"><SelectValue placeholder="全部" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">全部</SelectItem>
+                      <SelectItem value="normal">正常</SelectItem>
+                      <SelectItem value="damaged">损坏</SelectItem>
+                      <SelectItem value="expired">过期</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="unused-days">未更新天数</Label>
                   <Input
                     id="unused-days"
                     type="number"
-                    min={1}
-                    max={365}
-                    value={unusedDaysThreshold}
-                    onChange={(e) =>
-                      setUnusedDaysThreshold(Number(e.target.value) || 30)
-                    }
+                    value={unusedDaysInput}
+                    onChange={(e) => setUnusedDaysInput(e.target.value)}
+                    onBlur={() => { const v = Number(unusedDaysInput) || 0; if (v < 1) setUnusedDaysInput("1"); }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    超过该天数未访问的物品将被标记为长期未使用。
+                    超过该天数未更新的物品将被标记为长期未使用（最低 1 天）。
                   </p>
                 </div>
 
@@ -548,7 +613,9 @@ export default function InventoryPage() {
             库存列表
             {inventory.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                (共 {inventory.length} 项)
+                {filterKeyword || filterStatus
+                  ? `(筛选 ${filteredInventory.length}/${inventory.length} 项)`
+                  : `(共 ${inventory.length} 项)`}
               </span>
             )}
           </CardTitle>
@@ -585,7 +652,7 @@ export default function InventoryPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory.map((item) => (
+                  {filteredInventory.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">
                         {item.item.name}
@@ -652,31 +719,43 @@ export default function InventoryPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="create-name">物品名称</Label>
-              <Input
-                id="create-name"
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                placeholder="例如：螺丝刀"
-              />
+              <Label htmlFor="create-name">物品名称 *</Label>
+              <Input id="create-name" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="例如：螺丝刀" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="create-category">分类</Label>
+                <Input id="create-category" value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} placeholder="例如：工具" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-qty">初始数量</Label>
+                <Input id="create-qty" type="number" min={0} value={createQty} onChange={(e) => setCreateQty(e.target.value)} placeholder="0" />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-category">分类</Label>
-              <Input
-                id="create-category"
-                value={createCategory}
-                onChange={(e) => setCreateCategory(e.target.value)}
-                placeholder="例如：工具"
-              />
+              <Label htmlFor="create-spot">存放位置</Label>
+              <Input id="create-spot" value={createSpot} onChange={(e) => setCreateSpot(e.target.value)} placeholder="例如：储物间" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="create-status">状态</Label>
+                <Select value={createStatus} onValueChange={(v) => setCreateStatus(v as string)}>
+                  <SelectTrigger id="create-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">正常</SelectItem>
+                    <SelectItem value="damaged">损坏</SelectItem>
+                    <SelectItem value="expired">过期</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-expiry">保质期</Label>
+                <Input id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="create-desc">描述</Label>
-              <Input
-                id="create-desc"
-                value={createDesc}
-                onChange={(e) => setCreateDesc(e.target.value)}
-                placeholder="可选的描述信息"
-              />
+              <Input id="create-desc" value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder="可选的描述信息" />
             </div>
           </div>
           <DialogFooter>

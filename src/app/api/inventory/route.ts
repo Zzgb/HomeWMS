@@ -66,13 +66,23 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "仓库未找到或未连接" }, { status: 404 });
     }
 
-    // If item fields present, update item; otherwise update stock
+    // If item fields present, update item
     if (name !== undefined || desc !== undefined || category !== undefined) {
       const result = await inventoryService.updateItem(prisma, id, { name, desc, category });
       return NextResponse.json(result);
     }
 
+    // Stock fields present — could be update (stock ID) or create (item ID + spotId)
     if (qty !== undefined || status !== undefined || spotId !== undefined || expiryDate !== undefined) {
+      // Try updating stock by ID first; if it fails and spotId is given, treat as stockIn (create stock for item)
+      if (spotId !== undefined && qty !== undefined && qty > 0) {
+        // Check if id is an item (not stock) — find the item by id
+        const item = await prisma.item.findUnique({ where: { id } });
+        if (item) {
+          const result = await inventoryService.stockIn(prisma, item.name, qty, spotId, undefined, expiryDate, undefined, status);
+          return NextResponse.json(result);
+        }
+      }
       const result = await inventoryService.updateStock(prisma, id, { qty, status, spotId, expiryDate });
       return NextResponse.json(result);
     }

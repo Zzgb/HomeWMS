@@ -259,19 +259,21 @@ export const inventoryService = {
   },
 
   async checkStock(prisma: PrismaClient, unusedDaysThreshold: number = 30) {
+    // Clean up any zero/negative qty stocks first
+    await prisma.stock.deleteMany({ where: { qty: { lte: 0 } } }).catch(() => {});
+
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - unusedDaysThreshold);
 
     // Find items that haven't been used (no log entries) since cutoff
-    const recentItems = await prisma.log.findMany({
+    const recentLogs = await prisma.log.findMany({
       where: {
         createdAt: { gte: cutoff },
         itemId: { not: null },
       },
       select: { itemId: true },
-      distinct: ["itemId"],
     });
-    const recentItemIds = recentItems.map((l) => l.itemId!);
+    const recentItemIds = [...new Set(recentLogs.map((l) => l.itemId!))];
 
     const unusedItems = await prisma.stock.findMany({
       where: {

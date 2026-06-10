@@ -60,6 +60,8 @@ const ACTION_LABELS: Record<string, string> = {
   adjust: "调整",
   check: "盘点",
   rename: "改名",
+  expire: "过期",
+  debug: "调试",
 };
 
 const ACTION_OPTIONS = [
@@ -70,6 +72,8 @@ const ACTION_OPTIONS = [
   { value: "adjust", label: "调整" },
   { value: "check", label: "盘点" },
   { value: "rename", label: "改名" },
+  { value: "expire", label: "过期" },
+  { value: "debug", label: "调试" },
 ];
 
 function formatDate(dateStr: string): string {
@@ -87,6 +91,8 @@ function ActionBadge({ action }: { action: string }) {
     adjust: "outline",
     check: "secondary",
     rename: "default",
+    expire: "destructive",
+    debug: "outline",
   };
   return (
     <Badge variant={variantMap[action] ?? "default"} className="text-xs">
@@ -272,7 +278,9 @@ export default function LogsPage() {
                 onValueChange={(v: string) => setActionFilter(v)}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs">
-                  <SelectValue />
+                  <SelectValue>
+                    {ACTION_LABELS[actionFilter] || "全部操作"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {ACTION_OPTIONS.map((opt) => (

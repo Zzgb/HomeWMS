@@ -2,13 +2,22 @@ import { generateText } from "ai";
 import { getModel } from "@/agent/router";
 import { SUMMARIZER_PROMPT } from "@/lib/prompts";
 import { messageService } from "@/services/message.service";
-import { SUMMARY_THRESHOLD } from "@/lib/constants";
+import { DEFAULT_SUMMARY_THRESHOLD } from "@/lib/constants";
 import type { PrismaClient } from "@/generated/prisma/client";
 
-export async function maybeSummarize(prisma: PrismaClient): Promise<void> {
+export interface SummaryConfig {
+  enabled?: boolean;
+  threshold?: number;
+}
+
+export async function maybeSummarize(prisma: PrismaClient, config?: SummaryConfig): Promise<void> {
+  if (config?.enabled === false) return;
+
+  const threshold = config?.threshold || DEFAULT_SUMMARY_THRESHOLD;
+
   try {
     const count = await messageService.countSinceLastSummary(prisma);
-    if (count < SUMMARY_THRESHOLD) return;
+    if (count < threshold) return;
 
     const dbMessages = await messageService.getDbOperationMessages(prisma);
     if (dbMessages.length === 0) return;

@@ -79,6 +79,11 @@ interface StoreConfig {
   modelId?: string;
   memorySize?: number;
   customPrompt?: string;
+  summaryEnabled?: boolean;
+  summaryThreshold?: number;
+  summaryCount?: number;
+  contextMode?: string;
+  debugMode?: boolean;
 }
 
 const PROVIDERS = [
@@ -156,6 +161,11 @@ export default function SettingsPage() {
 
   // Memory tab state
   const [memorySize, setMemorySize] = useState(DEFAULT_MEMORY_SIZE);
+  const [summaryEnabled, setSummaryEnabled] = useState(false);
+  const [summaryThreshold, setSummaryThreshold] = useState(50);
+  const [summaryCount, setSummaryCount] = useState(3);
+  const [contextMode, setContextMode] = useState("recent");
+  const [debugMode, setDebugMode] = useState(false);
   const [savingMemory, setSavingMemory] = useState(false);
 
   // Tasks tab state
@@ -213,6 +223,21 @@ export default function SettingsPage() {
         }
         if (data?.memorySize) {
           setMemorySize(data.memorySize);
+        }
+        if (data?.summaryEnabled !== undefined) {
+          setSummaryEnabled(data.summaryEnabled);
+        }
+        if (data?.summaryThreshold) {
+          setSummaryThreshold(data.summaryThreshold);
+        }
+        if (data?.summaryCount) {
+          setSummaryCount(data.summaryCount);
+        }
+        if (data?.contextMode) {
+          setContextMode(data.contextMode);
+        }
+        if (data?.debugMode !== undefined) {
+          setDebugMode(data.debugMode);
         }
         if (data?.customPrompt !== undefined) {
           setCustomPrompt(data.customPrompt);
@@ -415,19 +440,23 @@ export default function SettingsPage() {
   // Memory tab handlers
   const handleSaveMemory = useCallback(async () => {
     if (!storeId) return;
+    if (contextMode !== "recent" && !summaryEnabled) {
+      alert("当前上下文模式需要启用摘要压缩，请先开启摘要压缩后再保存。");
+      return;
+    }
     setSavingMemory(true);
     try {
       await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memorySize }),
+        body: JSON.stringify({ memorySize, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode }),
       });
     } catch {
       // Ignore
     } finally {
       setSavingMemory(false);
     }
-  }, [storeId, memorySize]);
+  }, [storeId, memorySize, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode]);
 
   // Tasks tab handlers
   const openCreateTask = useCallback(() => {
@@ -614,7 +643,9 @@ export default function SettingsPage() {
                         onValueChange={handleProviderChange}
                       >
                         <SelectTrigger className="w-full max-w-xs">
-                          <SelectValue placeholder="选择服务商..." />
+                          <SelectValue>
+                            {PROVIDERS.find((p) => p.value === selectedProvider)?.label || "选择服务商..."}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {PROVIDERS.map((p) => (
@@ -634,7 +665,11 @@ export default function SettingsPage() {
                         disabled={!selectedProvider}
                       >
                         <SelectTrigger className="w-full max-w-xs">
-                          <SelectValue placeholder="选择模型..." />
+                          <SelectValue>
+                            {selectedModel === "__custom__"
+                              ? "自定义模型..."
+                              : (MODELS_BY_PROVIDER[selectedProvider] ?? []).find((m: any) => m.value === selectedModel)?.label || selectedModel || "选择模型..."}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {(MODELS_BY_PROVIDER[selectedProvider] ?? []).map(
@@ -919,7 +954,7 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-base">记忆设置</CardTitle>
               <CardDescription>
-                控制 AI 在上下文中记住多少条历史消息。数值越高提供的上下文越多，但会增加 token 消耗。
+                选择上下文模式并调整对应参数。模式决定 AI 获取历史信息的方式：原始消息或压缩摘要。
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -930,32 +965,170 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label>短期记忆条数</Label>
-                      <Input
-                        type="number"
-                        value={memorySize}
-                        onChange={(e) => { const v = e.target.value; setMemorySize(v === "" ? 0 : Number(v)); }}
-                        onBlur={() => {
-                          if (memorySize < 50) setMemorySize(50);
-                          if (memorySize > 2000) setMemorySize(2000);
-                        }}
-                        className="w-20 h-7 text-xs font-mono text-center"
-                      />
+                  {/* Context mode selector */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>上下文模式</Label>
+                      <p className="text-xs text-muted-foreground">
+                        选择 AI 上下文窗口包含哪些内容
+                      </p>
                     </div>
-                    <input
-                      type="range"
-                      min={50}
-                      max={2000}
-                      step={50}
-                      value={memorySize || 50}
-                      onChange={(e) => setMemorySize(Number(e.target.value))}
-                      className="w-full max-w-md accent-primary h-2 cursor-pointer"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground max-w-md">
-                      <span>50</span>
-                      <span>2000</span>
+                    <Select value={contextMode} onValueChange={setContextMode}>
+                      <SelectTrigger className="w-44 h-8 text-xs">
+                        <SelectValue>
+                          {{ recent: "仅短期记忆", summary: "仅压缩摘要", hybrid: "短期记忆 + 摘要" }[contextMode] || contextMode}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="recent">仅短期记忆</SelectItem>
+                        <SelectItem value="summary">仅压缩摘要</SelectItem>
+                        <SelectItem value="hybrid">短期记忆 + 摘要</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Short-term memory: shown for recent and hybrid */}
+                  {(contextMode === "recent" || contextMode === "hybrid") && (
+                    <div className="space-y-3 border-t border-border/50 pt-4 pl-3 border-l-2 border-l-primary/30">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">短期记忆</div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm">上下文条数</Label>
+                          <p className="text-xs text-muted-foreground">
+                            保留最近 N 条原始消息到上下文窗口
+                          </p>
+                        </div>
+                        <Input
+                          type="number"
+                          value={memorySize}
+                          onChange={(e) => { const v = e.target.value; setMemorySize(v === "" ? 0 : Number(v)); }}
+                          onBlur={() => {
+                            if (memorySize < 50) setMemorySize(50);
+                            if (memorySize > 2000) setMemorySize(2000);
+                          }}
+                          className="w-20 h-7 text-xs font-mono text-center"
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min={50}
+                        max={2000}
+                        step={50}
+                        value={memorySize || 50}
+                        onChange={(e) => setMemorySize(Number(e.target.value))}
+                        className="w-full max-w-md accent-primary h-2 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground max-w-md">
+                        <span>50</span>
+                        <span>2000</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary compression: shown for summary and hybrid */}
+                  {(contextMode === "summary" || contextMode === "hybrid") && (
+                    <div className="space-y-3 border-t border-border/50 pt-4 pl-3 border-l-2 border-l-primary/30">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">摘要压缩</div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm">启用</Label>
+                          <p className="text-xs text-muted-foreground">
+                            将历史 DB 操作自动压缩为英文摘要
+                          </p>
+                        </div>
+                        <Switch
+                          checked={summaryEnabled}
+                          onCheckedChange={setSummaryEnabled}
+                        />
+                      </div>
+
+                      {summaryEnabled && (
+                        <>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <Label className="text-sm">触发阈值</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  新消息数超过此阈值时触发摘要生成
+                                </p>
+                              </div>
+                              <Input
+                                type="number"
+                                value={summaryThreshold}
+                                onChange={(e) => { const v = e.target.value; setSummaryThreshold(v === "" ? 0 : Number(v)); }}
+                                onBlur={() => {
+                                  if (summaryThreshold < 10) setSummaryThreshold(10);
+                                  if (summaryThreshold > 500) setSummaryThreshold(500);
+                                }}
+                                className="w-16 h-7 text-xs font-mono text-center"
+                              />
+                            </div>
+                            <input
+                              type="range"
+                              min={10}
+                              max={500}
+                              step={10}
+                              value={summaryThreshold || 10}
+                              onChange={(e) => setSummaryThreshold(Number(e.target.value))}
+                              className="w-full max-w-md accent-primary h-2 cursor-pointer"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground max-w-md">
+                              <span>10</span>
+                              <span>500</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <Label className="text-sm">上下文条数</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  上下文窗口中包含的最近摘要数量
+                                </p>
+                              </div>
+                              <Input
+                                type="number"
+                                value={summaryCount}
+                                onChange={(e) => { const v = e.target.value; setSummaryCount(v === "" ? 0 : Number(v)); }}
+                                onBlur={() => {
+                                  if (summaryCount < 1) setSummaryCount(1);
+                                  if (summaryCount > 10) setSummaryCount(10);
+                                }}
+                                className="w-16 h-7 text-xs font-mono text-center"
+                              />
+                            </div>
+                            <input
+                              type="range"
+                              min={1}
+                              max={10}
+                              step={1}
+                              value={summaryCount || 1}
+                              onChange={(e) => setSummaryCount(Number(e.target.value))}
+                              className="w-full max-w-md accent-primary h-2 cursor-pointer"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground max-w-md">
+                              <span>1</span>
+                              <span>10</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Debug mode */}
+                  <div className="border-t border-border/50 pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>调试模式</Label>
+                        <p className="text-xs text-muted-foreground">
+                          开启后每次对话的完整上下文会写入操作日志
+                        </p>
+                      </div>
+                      <Switch
+                        checked={debugMode}
+                        onCheckedChange={setDebugMode}
+                      />
                     </div>
                   </div>
 
@@ -1107,7 +1280,9 @@ export default function SettingsPage() {
                   <Label htmlFor="task-type">类型</Label>
                   <Select value={taskType} onValueChange={setTaskType}>
                     <SelectTrigger id="task-type">
-                      <SelectValue />
+                      <SelectValue>
+                        {TASK_TYPES.find((t) => t.value === taskType)?.label || taskType}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {TASK_TYPES.map((t) => (
@@ -1179,7 +1354,9 @@ export default function SettingsPage() {
                   onValueChange={handleLanguageChange}
                 >
                   <SelectTrigger className="w-full max-w-xs">
-                    <SelectValue />
+                    <SelectValue>
+                      {LANGUAGE_OPTIONS.find((l: any) => l.value === language)?.label || language}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {LANGUAGE_OPTIONS.map((lang) => (

@@ -24,6 +24,11 @@ export interface WarehouseConfig {
   modelId?: string;
   memorySize?: number;
   customPrompt?: string;
+  summaryEnabled?: boolean;
+  summaryThreshold?: number;
+  summaryCount?: number;
+  contextMode?: string;
+  debugMode?: boolean;
   createdAt: string;
 }
 
@@ -38,6 +43,11 @@ export interface WarehouseListItem {
   error?: string;
   modelId?: string;
   memorySize?: number;
+  summaryEnabled?: boolean;
+  summaryThreshold?: number;
+  summaryCount?: number;
+  contextMode?: string;
+  debugMode?: boolean;
   createdAt: string;
 }
 
@@ -225,6 +235,11 @@ export function updateWarehouse(
     modelId?: string;
     memorySize?: number;
     customPrompt?: string;
+    summaryEnabled?: boolean;
+    summaryThreshold?: number;
+    summaryCount?: number;
+    contextMode?: string;
+    debugMode?: boolean;
   }
 ): { success: boolean; error?: string } {
   try {
@@ -241,6 +256,11 @@ export function updateWarehouse(
     if (updates.modelId !== undefined) cfg.modelId = updates.modelId;
     if (updates.memorySize !== undefined) cfg.memorySize = updates.memorySize;
     if (updates.customPrompt !== undefined) cfg.customPrompt = updates.customPrompt;
+    if (updates.summaryEnabled !== undefined) cfg.summaryEnabled = updates.summaryEnabled;
+    if (updates.summaryThreshold !== undefined) cfg.summaryThreshold = updates.summaryThreshold;
+    if (updates.summaryCount !== undefined) cfg.summaryCount = updates.summaryCount;
+    if (updates.contextMode !== undefined) cfg.contextMode = updates.contextMode;
+    if (updates.debugMode !== undefined) cfg.debugMode = updates.debugMode;
     warehouses.set(id, cfg);
     writeWarehouses(warehouses);
     return { success: true };
@@ -266,6 +286,11 @@ export async function listWarehouses(): Promise<WarehouseListItem[]> {
       error: test.success ? undefined : test.error,
       modelId: cfg.modelId,
       memorySize: cfg.memorySize,
+      summaryEnabled: cfg.summaryEnabled,
+      summaryThreshold: cfg.summaryThreshold,
+      summaryCount: cfg.summaryCount,
+      contextMode: cfg.contextMode,
+      debugMode: cfg.debugMode,
       createdAt: cfg.createdAt,
     });
   }

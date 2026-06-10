@@ -69,9 +69,14 @@ export default function ChatPage() {
       });
   }, []);
 
+  const [lang] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("language") || "zh";
+    return "zh";
+  });
+
   const chatTransport = useMemo(
-    () => storeId ? new DefaultChatTransport({ api: "/api/chat", body: { storeId } }) : undefined,
-    [storeId]
+    () => storeId ? new DefaultChatTransport({ api: "/api/chat", body: { storeId, language: lang } }) : undefined,
+    [storeId, lang]
   );
 
   const {

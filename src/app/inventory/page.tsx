@@ -465,7 +465,11 @@ export default function InventoryPage() {
                 <div className="space-y-2">
                   <Label htmlFor="filter-status">状态</Label>
                   <Select value={dialogStatus} onValueChange={(v) => setDialogStatus(v as string)}>
-                    <SelectTrigger id="filter-status"><SelectValue placeholder="全部" /></SelectTrigger>
+                    <SelectTrigger id="filter-status">
+                      <SelectValue>
+                        {{ normal: "正常", damaged: "损坏", expired: "过期" }[dialogStatus as string] || "全部"}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="">全部</SelectItem>
                       <SelectItem value="normal">正常</SelectItem>
@@ -634,7 +638,11 @@ export default function InventoryPage() {
               <div className="space-y-2">
                 <Label htmlFor="create-status">状态</Label>
                 <Select value={createStatus} onValueChange={(v) => setCreateStatus(v as string)}>
-                  <SelectTrigger id="create-status"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="create-status">
+                    <SelectValue>
+                      {{ normal: "正常", damaged: "损坏", expired: "过期" }[createStatus] || createStatus}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="normal">正常</SelectItem>
                     <SelectItem value="damaged">损坏</SelectItem>
@@ -739,7 +747,9 @@ export default function InventoryPage() {
               <Label htmlFor="stock-status">状态</Label>
               <Select value={editStockStatus} onValueChange={(v) => setEditStockStatus(v as string)}>
                 <SelectTrigger id="stock-status">
-                  <SelectValue />
+                  <SelectValue>
+                    {{ normal: "正常", damaged: "损坏", expired: "过期" }[editStockStatus] || editStockStatus}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="normal">正常</SelectItem>

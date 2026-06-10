@@ -6,7 +6,7 @@ import { inventoryService } from "@/services/inventory.service";
 export function makeStockInTool(prisma: PrismaClient) {
   return tool({
     description:
-      "Add (stock in) a quantity of an item to a specific location. If the item or location does not exist, they will be created automatically. Use this when receiving new goods, restocking, or recording that items have arrived at a particular spot. Returns the total quantity after the operation.",
+      "MANDATORY for adding items: 入库/买了/收到了/放进. Adds items to inventory. Auto-creates item/location if they don't exist. Call findItem first to check if item already exists.",
     inputSchema: z.object({
       itemName: z
         .string()

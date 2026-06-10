@@ -4,3 +4,7 @@ export const MAX_TOOL_STEPS = 10;
 export const SUMMARY_THRESHOLD = 50;
 export const SUMMARY_COUNT = 3;
 export const UNUSED_DAYS_DEFAULT = 30;
+export const DEFAULT_SUMMARY_ENABLED = false;
+export const DEFAULT_SUMMARY_THRESHOLD = 50;
+export const DEFAULT_SUMMARY_CONTEXT_COUNT = 3;
+export const DEFAULT_CONTEXT_MODE = "recent";

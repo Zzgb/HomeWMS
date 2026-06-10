@@ -6,7 +6,7 @@ import { inventoryService } from "@/services/inventory.service";
 export function makeFindItemTool(prisma: PrismaClient) {
   return tool({
     description:
-      "Search for items by name (fuzzy), or leave keyword empty to list ALL items. Returns items with stock levels and locations. Use empty keyword to get a full inventory overview.",
+      "MANDATORY first step for ANY inventory operation. Search items by name or use empty keyword to list all. ALWAYS call this before consumeItem/moveItem/deleteItem/updateStock to get exact DB names. Returns stocks with quantities, locations, status, expiry.",
     inputSchema: z.object({
       keyword: z
         .string()
@@ -15,7 +15,12 @@ export function makeFindItemTool(prisma: PrismaClient) {
     }),
     execute: async ({ keyword }) => {
       const k = keyword?.trim() || "";
-      const items = await inventoryService.findItems(prisma, k);
+      let items = await inventoryService.findItems(prisma, k);
+
+      // Fallback: if search returns nothing, return ALL items so AI can find the correct name
+      if (items.length === 0 && k) {
+        items = await inventoryService.findItems(prisma, "");
+      }
 
       // Log the query
       await prisma.log.create({
@@ -29,16 +34,18 @@ export function makeFindItemTool(prisma: PrismaClient) {
         return {
           found: false,
           keyword: k,
-          message: k ? `未找到匹配 "${k}" 的物品` : "仓库中还没有物品",
+          message: "仓库中还没有物品",
           items: [],
         };
       }
 
+      const fallback = k && items.length > 0 && !items.some(i => i.name.toLowerCase().includes(k.toLowerCase()));
       const now = new Date();
       return {
         found: true,
         keyword: k,
         total: items.length,
+        note: fallback ? `No exact match for "${k}". Showing ALL items — use the exact name from this list.` : undefined,
         items: items.map((item) => ({
           name: item.name,
           category: item.category,

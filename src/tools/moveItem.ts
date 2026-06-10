@@ -28,7 +28,12 @@ export function makeMoveItemTool(prisma: PrismaClient) {
     }),
     execute: async ({ itemName, fromSpot, toSpot, qty }) => {
       try {
-        return await inventoryService.moveItem(prisma, itemName, fromSpot, toSpot, qty);
+        const result = await inventoryService.moveItem(prisma, itemName, fromSpot, toSpot, qty);
+        if (!result.success && (result as any).suggestions?.length === 1) {
+          const retryName = (result as any).suggestions[0];
+          return await inventoryService.moveItem(prisma, retryName, fromSpot, toSpot, qty);
+        }
+        return result;
       } catch (e: any) {
         return { success: false, message: `移动失败: ${e.message || "未知错误"}` };
       }

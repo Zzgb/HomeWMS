@@ -22,6 +22,11 @@ export async function GET(
       modelId: config.modelId || "",
       memorySize: config.memorySize || 200,
       customPrompt: config.customPrompt || SYSTEM_PROMPT,
+      summaryEnabled: config.summaryEnabled ?? false,
+      summaryThreshold: config.summaryThreshold || 50,
+      summaryCount: config.summaryCount || 3,
+      contextMode: config.contextMode || "recent",
+      debugMode: config.debugMode ?? false,
     });
   } catch (error) {
     console.error("GET /api/settings/[storeId] error:", error);
@@ -39,13 +44,18 @@ export async function PUT(
   try {
     const { storeId } = await params;
     const body = await request.json();
-    const { name, modelId, memorySize, customPrompt } = body;
+    const { name, modelId, memorySize, customPrompt, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode } = body;
 
     const result = updateWarehouse(storeId, {
       ...(name !== undefined ? { name } : {}),
       ...(modelId !== undefined ? { modelId } : {}),
       ...(memorySize !== undefined ? { memorySize: Number(memorySize) } : {}),
       ...(customPrompt !== undefined ? { customPrompt } : {}),
+      ...(summaryEnabled !== undefined ? { summaryEnabled } : {}),
+      ...(summaryThreshold !== undefined ? { summaryThreshold: Number(summaryThreshold) } : {}),
+      ...(summaryCount !== undefined ? { summaryCount: Number(summaryCount) } : {}),
+      ...(contextMode !== undefined ? { contextMode } : {}),
+      ...(debugMode !== undefined ? { debugMode } : {}),
     });
     if (!result.success) {
       return NextResponse.json(

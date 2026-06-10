@@ -96,9 +96,16 @@ export const inventoryService = {
         include: { item: true, spot: true },
       });
 
+      if (!verifiedStock || verifiedStock.qty !== stock.qty) {
+        return {
+          success: false,
+          message: `❌ FAILED: Verification error. Expected qty ${stock.qty}, DB shows ${verifiedStock?.qty ?? "null"}. Operation did NOT take effect. Retry.`,
+        };
+      }
+
       return {
         success: true,
-        message: `Added ${qty} ${itemName} to ${spotName}. Total: ${stock.qty}`,
+        message: `✅ Added ${qty} ${itemName} to ${spotName}. Verified total: ${verifiedStock.qty}`,
         logId: log.id,
         verified: verifiedStock
           ? {
@@ -120,84 +127,118 @@ export const inventoryService = {
     spotName: string,
     note?: string
   ) {
-    return prisma.$transaction(async (tx) => {
-      // Find item
-      const item = await tx.item.findFirst({
-        where: { name: { equals: itemName, mode: "insensitive" } },
+    // Pre-fetch item+spot for post-transaction verification
+    const preItem = await prisma.item.findFirst({
+      where: { name: { equals: itemName, mode: "insensitive" } },
+    });
+    if (!preItem) {
+      let similar = await prisma.item.findMany({
+        where: { name: { contains: itemName, mode: "insensitive" } },
+        take: 5, select: { name: true },
       });
-      if (!item) {
-        return { success: false, message: `Item "${itemName}" not found.` };
+      if (similar.length === 0) {
+        similar = await prisma.item.findMany({ take: 10, select: { name: true }, orderBy: { name: "asc" } });
       }
+      return {
+        success: false,
+        message: `❌ FAILED: "${itemName}" not in database. You MUST retry with one of: ${similar.map((s) => s.name).join(", ")}`,
+        suggestions: similar.map((s) => s.name),
+      };
+    }
 
-      // Find spot
-      const spot = await tx.spot.findFirst({
-        where: { name: { equals: spotName, mode: "insensitive" } },
-      });
-      if (!spot) {
-        return { success: false, message: `Location "${spotName}" not found.` };
-      }
+    const preSpot = await prisma.spot.findFirst({
+      where: { name: { equals: spotName, mode: "insensitive" } },
+    });
+    if (!preSpot) {
+      const spots = await prisma.spot.findMany({ take: 10, select: { name: true }, orderBy: { name: "asc" } });
+      return {
+        success: false,
+        message: `❌ FAILED: Location "${spotName}" not found. Available: ${spots.map((s) => s.name).join(", ")}.`,
+        suggestions: spots.map((s) => s.name),
+      };
+    }
 
-      // Find stock
+    // Save pre-op qty for verification
+    const preStock = await prisma.stock.findUnique({
+      where: { itemId_spotId: { itemId: preItem.id, spotId: preSpot.id } },
+    });
+    const preQty = preStock?.qty ?? 0;
+    if (preQty < qty) {
+      return {
+        success: false,
+        message: `❌ FAILED: Insufficient stock. Only ${preQty} available, you asked for ${qty}.`,
+      };
+    }
+
+    // Execute in transaction
+    const txResult = await prisma.$transaction(async (tx) => {
       const stock = await tx.stock.findUnique({
-        where: {
-          itemId_spotId: { itemId: item.id, spotId: spot.id },
-        },
+        where: { itemId_spotId: { itemId: preItem.id, spotId: preSpot.id } },
       });
-      if (!stock) {
-        return {
-          success: false,
-          message: `No stock of "${itemName}" found at "${spotName}".`,
-        };
-      }
-      if (stock.qty < qty) {
-        return {
-          success: false,
-          message: `Insufficient stock. ${itemName} at ${spotName} has ${stock.qty}, but you requested ${qty}.`,
-        };
+      if (!stock || stock.qty < qty) {
+        return { committed: false };
       }
 
-      // Decrement or delete stock
       const newQty = stock.qty - qty;
       if (newQty <= 0) {
         await tx.stock.delete({ where: { id: stock.id } });
       } else {
-        await tx.stock.update({
-          where: { id: stock.id },
-          data: { qty: { decrement: qty } },
-        });
+        await tx.stock.update({ where: { id: stock.id }, data: { qty: { decrement: qty } } });
       }
 
-      // Create log
       const log = await tx.log.create({
         data: {
-          itemId: item.id,
+          itemId: preItem.id,
           action: "out",
           qty: -qty,
-          fromSpot: spot.id,
+          fromSpot: preSpot.id,
           note: note || `Consumed: ${itemName} -${qty} from ${spotName}`,
         },
       });
 
-      // Verify: re-query to confirm remaining or deletion
-      const verifiedStock = await tx.stock.findUnique({
-        where: { itemId_spotId: { itemId: item.id, spotId: spot.id } },
-        include: { item: true, spot: true },
-      });
+      return { committed: true, newQty, logId: log.id };
+    });
 
+    if (!txResult.committed) {
+      return { success: false, message: `❌ FAILED: Stock changed during operation. Retry.` };
+    }
+
+    // POST-TRANSACTION verification with main client
+    const postStock = await prisma.stock.findUnique({
+      where: { itemId_spotId: { itemId: preItem.id, spotId: preSpot.id } },
+      include: { item: true, spot: true },
+    });
+
+    const expectedQty = preQty - qty;
+    const actualQty = postStock?.qty ?? 0;
+
+    if (expectedQty !== actualQty) {
+      return {
+        success: false,
+        message: `❌ FAILED: Post-verification failed. Expected ${expectedQty} remaining (was ${preQty}, removed ${qty}), but DB shows ${actualQty}. The database was NOT updated.`,
+      };
+    }
+
+    if (expectedQty <= 0) {
       return {
         success: true,
-        message: `Removed ${qty} ${itemName} from ${spotName}.${newQty > 0 ? ` Remaining: ${newQty}` : " Stock cleared."}`,
-        logId: log.id,
-        verified: verifiedStock
-          ? {
-              itemName: verifiedStock.item.name,
-              spotName: verifiedStock.spot.name,
-              remaining: verifiedStock.qty,
-              status: verifiedStock.status,
-            }
-          : { remaining: 0, deleted: true },
+        message: `✅ Removed ${qty} ${itemName} from ${spotName}. Stock cleared (was ${preQty}).`,
+        logId: txResult.logId,
+        verified: { remaining: 0, deleted: true },
       };
-    });
+    }
+
+    return {
+      success: true,
+      message: `✅ Removed ${qty} ${itemName} from ${spotName}. Verified: ${actualQty} remaining (was ${preQty}).`,
+      logId: txResult.logId,
+      verified: {
+        itemName: postStock!.item.name,
+        spotName: postStock!.spot.name,
+        remaining: postStock!.qty,
+        status: postStock!.status,
+      },
+    };
   },
 
   async moveItem(
@@ -213,7 +254,23 @@ export const inventoryService = {
         where: { name: { equals: itemName, mode: "insensitive" } },
       });
       if (!item) {
-        return { success: false, message: `Item "${itemName}" not found.` };
+        let similar = await tx.item.findMany({
+          where: { name: { contains: itemName, mode: "insensitive" } },
+          take: 5,
+          select: { name: true },
+        });
+        if (similar.length === 0) {
+          similar = await tx.item.findMany({
+            take: 10,
+            select: { name: true },
+            orderBy: { name: "asc" },
+          });
+        }
+        return {
+          success: false,
+          message: `[OPERATION FAILED] Item "${itemName}" not found. Available items: ${similar.map((s) => s.name).join(", ")}`,
+          suggestions: similar.map((s) => s.name),
+        };
       }
 
       // Find source spot
@@ -221,7 +278,11 @@ export const inventoryService = {
         where: { name: { equals: fromSpotName, mode: "insensitive" } },
       });
       if (!fromSpot) {
-        return { success: false, message: `Source location "${fromSpotName}" not found.` };
+        const spots = await tx.spot.findMany({ take: 10, select: { name: true }, orderBy: { name: "asc" } });
+        return {
+          success: false,
+          message: `[OPERATION FAILED] Source location "${fromSpotName}" not found. Available locations: ${spots.map((s) => s.name).join(", ")}`,
+        };
       }
 
       // Find source stock
@@ -287,9 +348,29 @@ export const inventoryService = {
         where: { itemId_spotId: { itemId: item.id, spotId: toSpot.id } },
       });
 
+      // Validate source
+      if (newQty > 0 && (!verifiedSource || verifiedSource.qty !== newQty)) {
+        return {
+          success: false,
+          message: `❌ FAILED: Source verification error. Expected ${newQty} at ${fromSpotName}, found ${verifiedSource?.qty ?? "deleted"}. Operation did NOT take effect.`,
+        };
+      }
+      if (newQty <= 0 && verifiedSource) {
+        return {
+          success: false,
+          message: `❌ FAILED: Source should be empty at ${fromSpotName} but still has ${verifiedSource.qty}. Operation did NOT take effect.`,
+        };
+      }
+      if (!verifiedTarget || verifiedTarget.qty < qty) {
+        return {
+          success: false,
+          message: `❌ FAILED: Target verification error. Expected ≥${qty} at ${toSpotName}, found ${verifiedTarget?.qty ?? "null"}. Operation did NOT take effect.`,
+        };
+      }
+
       return {
         success: true,
-        message: `Moved ${qty} ${itemName} from ${fromSpotName} to ${toSpotName}.`,
+        message: `✅ Moved ${qty} ${itemName} from ${fromSpotName} to ${toSpotName}. Verified.`,
         logId: log.id,
         verified: {
           source: verifiedSource

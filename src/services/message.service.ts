@@ -57,10 +57,10 @@ export const messageService = {
     });
   },
 
-  async getRecentSummaries(prisma: PrismaClient) {
+  async getRecentSummaries(prisma: PrismaClient, limit?: number) {
     return prisma.summary.findMany({
       orderBy: { createdAt: "desc" },
-      take: SUMMARY_COUNT,
+      take: limit || SUMMARY_COUNT,
     });
   },
 };

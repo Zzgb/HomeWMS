@@ -6,7 +6,7 @@ import { inventoryService } from "@/services/inventory.service";
 export function makeConsumeItemTool(prisma: PrismaClient) {
   return tool({
     description:
-      "Remove (consume) a quantity of an item from a specific location. Use this when items are taken out of inventory for use, sold, discarded, or otherwise removed. Returns an error if the item, location, or sufficient quantity is not found. Check stock first with find-item if unsure about availability.",
+      "MANDATORY for any removal: 喝/吃/用/扔/取出/消耗/出库. Removes items from inventory. Call findItem FIRST to get exact DB names, then call this tool with those exact names. Do NOT guess item names.",
     inputSchema: z.object({
       itemName: z
         .string()
@@ -28,7 +28,13 @@ export function makeConsumeItemTool(prisma: PrismaClient) {
     }),
     execute: async ({ itemName, qty, spot, note }) => {
       try {
-        return await inventoryService.consumeItem(prisma, itemName, qty, spot, note);
+        const result = await inventoryService.consumeItem(prisma, itemName, qty, spot, note);
+        // Auto-retry only with single suggestion (fuzzy match found exactly one)
+        if (!result.success && (result as any).suggestions?.length === 1) {
+          const retryName = (result as any).suggestions[0];
+          return await inventoryService.consumeItem(prisma, retryName, qty, spot, note);
+        }
+        return result;
       } catch (e: any) {
         return { success: false, message: `出库失败: ${e.message || "未知错误"}` };
       }

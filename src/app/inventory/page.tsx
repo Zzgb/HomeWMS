@@ -643,7 +643,7 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create-expiry">保质期（可选）</Label>
-                <Input key={`create-date-${createOpen}`} id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} autoComplete="off" />
+                <Input id="create-expiry" placeholder="YYYY-MM-DD" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
@@ -743,7 +743,7 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="stock-expiry">保质期</Label>
-              <Input id="stock-expiry" type="date" value={editStockExpiry} onChange={(e) => setEditStockExpiry(e.target.value)} />
+              <Input id="stock-expiry" placeholder="YYYY-MM-DD" value={editStockExpiry} onChange={(e) => setEditStockExpiry(e.target.value)} />
               <p className="text-xs text-muted-foreground">可选，留空表示无保质期限制</p>
             </div>
           </div>

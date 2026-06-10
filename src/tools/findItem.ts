@@ -45,6 +45,7 @@ export function makeFindItemTool(prisma: PrismaClient) {
             spot: s.spot.name,
             qty: s.qty,
             status: s.status,
+            expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
           })),
         })),
       };

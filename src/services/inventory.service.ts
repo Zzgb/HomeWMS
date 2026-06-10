@@ -309,6 +309,7 @@ export const inventoryService = {
         spotName: s.spot.name,
         qty: s.qty,
         status: s.status,
+        expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
         lastUsed: s.updatedAt.toISOString(),
       })),
       damagedItems: [...damagedItems, ...expiredByDate].map((s) => ({
@@ -316,6 +317,7 @@ export const inventoryService = {
         spotName: s.spot.name,
         qty: s.qty,
         status: s.expiryDate && s.expiryDate < new Date() ? "expired" : s.status,
+        expiryDate: s.expiryDate?.toISOString().slice(0, 10) ?? null,
       })),
     };
   },

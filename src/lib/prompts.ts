@@ -55,6 +55,12 @@ When calling stockIn, ALWAYS infer the item category from its name and user cont
 - 药品 (medicine): medicine, bandage, vitamin, pill, syrup, ointment, etc.
 - 其他 (other): anything that doesn't fit above categories
 
+## Reading stock status correctly
+When findItem or checkStock returns data, each stock has `status` and `expiryDate` fields.
+- If expiryDate is set AND the date is before today, the item IS expired — regardless of what status says.
+- Tell the user the item is expired even if status is still "normal".
+- Example: Bread with status="normal" but expiryDate="2026-06-08" (before today 2026-06-10) → this Bread is EXPIRED, tell the user.
+
 ## Status detection
 When calling stockIn, detect the item's condition from the user's words:
 - If the user says something is 坏了/烂了/变质/发霉/过期/损坏, set status to "damaged"

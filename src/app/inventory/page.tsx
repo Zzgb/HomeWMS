@@ -31,8 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Search, AlertTriangle, Package, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, Search, Package, AlertTriangle, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 
 interface Store {
   id: string;
@@ -50,19 +49,6 @@ interface StockItem {
   status: string;
   expiryDate?: string | null;
   updatedAt: string;
-}
-
-interface CheckResultItem {
-  itemName: string;
-  spotName: string;
-  qty: number;
-  status: string;
-  lastUsed?: string;
-}
-
-interface CheckResults {
-  unusedItems: CheckResultItem[];
-  damagedItems: CheckResultItem[];
 }
 
 function formatDate(dateStr: string): string {
@@ -102,21 +88,12 @@ export default function InventoryPage() {
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
 
-  // Stock check dialog
+  // Filter dialog
   const [checkOpen, setCheckOpen] = useState(false);
-  const [unusedDaysThreshold, setUnusedDaysThreshold] = useState(30);
-  const [unusedDaysInput, setUnusedDaysInput] = useState("30");
-  const [checkLoading, setCheckLoading] = useState(false);
-  const [checkResults, setCheckResults] = useState<CheckResults | null>(null);
-  const [checkError, setCheckError] = useState<string | null>(null);
-
-  // Client-side table filters (applied)
   const [filterKeyword, setFilterKeyword] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  // Dialog temp values (not yet applied)
   const [dialogKeyword, setDialogKeyword] = useState("");
   const [dialogStatus, setDialogStatus] = useState("");
-
   const hasActiveFilter = !!(filterKeyword || filterStatus);
 
   // Create item dialog
@@ -202,31 +179,6 @@ export default function InventoryPage() {
     setStoreId(val as string);
     localStorage.setItem("activeStoreId", val as string);
   }, []);
-
-  const handleCheck = useCallback(async () => {
-    if (!storeId) return;
-    const days = Number(unusedDaysInput) || 0;
-    if (days < 1) { setUnusedDaysInput("1"); return; }
-    setUnusedDaysThreshold(days);
-    setCheckLoading(true);
-    setCheckError(null);
-    setCheckResults(null);
-
-    try {
-      const res = await fetch("/api/inventory/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storeId, unusedDaysThreshold: days }),
-      });
-      if (!res.ok) throw new Error("Stock check failed");
-      const data: CheckResults = await res.json();
-      setCheckResults(data);
-    } catch (err) {
-      setCheckError(err instanceof Error ? err.message : "Check failed");
-    } finally {
-      setCheckLoading(false);
-    }
-  }, [storeId, unusedDaysInput]);
 
   // Create item
   const handleCreateItem = async () => {
@@ -479,27 +431,25 @@ export default function InventoryPage() {
             新增物品
           </Button>
           <Dialog open={checkOpen} onOpenChange={(open) => {
-            if (open) { setDialogKeyword(filterKeyword); setDialogStatus(filterStatus); setUnusedDaysInput(""); setCheckResults(null); setCheckError(null); }
+            if (open) { setDialogKeyword(filterKeyword); setDialogStatus(filterStatus); }
             setCheckOpen(open);
           }}>
             <DialogTrigger className={cn(
               "inline-flex items-center justify-center rounded-md border px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground",
-              hasActiveFilter ? "border-primary/50 bg-primary/10 text-primary" : "border-input bg-background"
+              hasActiveFilter ? "border-primary text-primary bg-primary/10 hover:bg-primary/20" : "border-input bg-background"
             )}>
               <Search className="h-4 w-4 mr-1.5" />
-              {hasActiveFilter ? "筛选(已筛选)" : "筛选"}
+              {hasActiveFilter ? `筛选(${filteredInventory.length}/${inventory.length})` : "筛选"}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>库存筛选与盘点</DialogTitle>
-                <DialogDescription>
-                  按条件过滤库存列表，或执行盘点找出长期未更新及损坏/过期物品。
-                </DialogDescription>
+                <DialogTitle>筛选库存</DialogTitle>
+                <DialogDescription>按条件过滤库存列表。</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="filter-keyword">物品名称</Label>
-                  <Input id="filter-keyword" placeholder="输入关键字过滤..." value={dialogKeyword} onChange={(e) => setDialogKeyword(e.target.value)} />
+                  <Input id="filter-keyword" placeholder="关键字..." value={dialogKeyword} onChange={(e) => setDialogKeyword(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="filter-status">状态</Label>
@@ -513,87 +463,19 @@ export default function InventoryPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="unused-days">未更新天数（盘点用）</Label>
-                  <Input
-                    id="unused-days"
-                    type="number"
-                    placeholder="不填则不执行盘点"
-                    value={unusedDaysInput}
-                    onChange={(e) => setUnusedDaysInput(e.target.value)}
-                    onBlur={() => { const v = Number(unusedDaysInput) || 0; if (v > 0 && v < 1) setUnusedDaysInput("1"); }}
-                  />
-                  <p className="text-xs text-muted-foreground">填写天数后点"执行盘点"将查询长期未更新及损坏/过期物品。</p>
-                </div>
-
-                {checkError && (
-                  <div className="text-destructive text-sm flex items-center gap-1.5">
-                    <AlertTriangle className="h-4 w-4" />
-                    {checkError}
-                  </div>
-                )}
-
-                {checkResults && (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">
-                        长期未使用物品 ({checkResults.unusedItems.length})
-                      </h4>
-                      {checkResults.unusedItems.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">未发现长期未使用物品</p>
-                      ) : (
-                        <ScrollArea className="max-h-[150px]">
-                          <div className="space-y-1">
-                            {checkResults.unusedItems.map((item, i) => (
-                              <div key={i} className="flex justify-between text-sm py-1 px-2 rounded bg-muted/50">
-                                <span>{item.itemName}</span>
-                                <span className="text-muted-foreground">{item.spotName} x{item.qty}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">
-                        损坏/过期物品 ({checkResults.damagedItems.length})
-                      </h4>
-                      {checkResults.damagedItems.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">未发现损坏/过期物品</p>
-                      ) : (
-                        <ScrollArea className="max-h-[150px]">
-                          <div className="space-y-1">
-                            {checkResults.damagedItems.map((item, i) => (
-                              <div key={i} className="flex justify-between text-sm py-1 px-2 rounded bg-destructive/10">
-                                <span>{item.itemName}</span>
-                                <span className="text-muted-foreground">{item.spotName} x{item.qty}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => {
-                  setFilterKeyword(""); setFilterStatus("");
-                  setDialogKeyword(""); setDialogStatus("");
-                  setUnusedDaysInput(""); setCheckResults(null); setCheckError(null);
+                  setFilterKeyword(""); setFilterStatus(""); setDialogKeyword(""); setDialogStatus("");
                   setCheckOpen(false);
                 }}>
                   清除筛选
                 </Button>
-                <Button variant="outline" onClick={() => {
+                <Button onClick={() => {
                   setFilterKeyword(dialogKeyword); setFilterStatus(dialogStatus);
                   setCheckOpen(false);
                 }}>
-                  执行筛选
-                </Button>
-                <Button onClick={handleCheck} disabled={checkLoading}>
-                  {checkLoading && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-                  执行盘点
+                  应用
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -745,7 +627,7 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="create-expiry">保质期</Label>
-                <Input id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} className="[&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert-[0.5] dark:[&::-webkit-calendar-picker-indicator]:invert" />
+                <Input id="create-expiry" type="date" value={createExpiry} onChange={(e) => setCreateExpiry(e.target.value)} />
               </div>
             </div>
             <div className="space-y-2">
@@ -845,13 +727,7 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="stock-expiry">保质期</Label>
-              <Input
-                id="stock-expiry"
-                type="date"
-                value={editStockExpiry}
-                onChange={(e) => setEditStockExpiry(e.target.value)}
-                className="[&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:invert-[0.5] dark:[&::-webkit-calendar-picker-indicator]:invert"
-              />
+              <Input id="stock-expiry" type="date" value={editStockExpiry} onChange={(e) => setEditStockExpiry(e.target.value)} />
               <p className="text-xs text-muted-foreground">非必填，留空则不显示状态</p>
             </div>
           </div>

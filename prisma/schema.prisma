@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Item {
+  id       String  @id @default(cuid())
+  name     String
+  desc     String?
+  category String?
+
+  stocks Stock[]
+  logs   Log[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name])
+}
+
+model Spot {
+  id       String  @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Spot?   @relation("SpotTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Spot[]  @relation("SpotTree")
+
+  stocks Stock[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, parentId])
+}
+
+model Stock {
+  id     String @id @default(cuid())
+  itemId String
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  spotId String
+  spot   Spot   @relation(fields: [spotId], references: [id], onDelete: Cascade)
+  qty    Int    @default(0)
+  status     String    @default("normal")
+  expiryDate DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([itemId, spotId])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  itemId    String?
+  item      Item?    @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  action    String
+  qty       Int?
+  fromSpot  String?
+  toSpot    String?
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([itemId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  role       String
+  content    String
+  toolCalls  Json?
+  tokenCount Int?
+  aiName     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Summary {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Task {
+  id        String    @id @default(cuid())
+  type      String
+  cron      String
+  lastRun   DateTime?
+  enabled   Boolean   @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}

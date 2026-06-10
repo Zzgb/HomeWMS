@@ -419,12 +419,11 @@ export default function InventoryPage() {
   // Client-side filtered inventory
   const filteredInventory = inventory.filter((item) => {
     if (filterKeyword && !item.item.name.toLowerCase().includes(filterKeyword.toLowerCase())) return false;
-    if (filterStatus && item.status !== filterStatus) {
-      // Also check computed expiry status
-      const isExpired = item.status === "normal" && item.expiryDate && new Date(item.expiryDate) < new Date();
-      if (filterStatus === "expired" && !isExpired) return false;
-      if (filterStatus !== "expired" && isExpired) return false;
-      if (filterStatus !== "expired") return false;
+    if (filterStatus) {
+      const isExpiredByDate = item.status === "normal" && item.expiryDate && new Date(item.expiryDate) < new Date();
+      if (filterStatus === "expired" && !(item.status === "expired" || isExpiredByDate)) return false;
+      if (filterStatus === "damaged" && item.status !== "damaged") return false;
+      if (filterStatus === "normal" && (item.status !== "normal" || isExpiredByDate)) return false;
     }
     return true;
   });

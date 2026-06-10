@@ -58,7 +58,7 @@ export async function POST(req: Request) {
     let system: string;
     let dbMessages: any[];
     try {
-      const ctx = await assembleContext(prisma, cfg?.name || storeId, memorySize, aiName);
+      const ctx = await assembleContext(prisma, cfg?.name || storeId, memorySize, aiName, storeId);
       system = ctx.system;
       dbMessages = ctx.messages;
     } catch (e) {

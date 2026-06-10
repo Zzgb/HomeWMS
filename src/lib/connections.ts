@@ -23,6 +23,7 @@ export interface WarehouseConfig {
   database: string;
   modelId?: string;
   memorySize?: number;
+  customPrompt?: string;
   createdAt: string;
 }
 
@@ -222,6 +223,7 @@ export function updateWarehouse(
     database?: string;
     modelId?: string;
     memorySize?: number;
+    customPrompt?: string;
   }
 ): { success: boolean; error?: string } {
   try {
@@ -237,6 +239,7 @@ export function updateWarehouse(
     if (updates.database !== undefined) cfg.database = updates.database;
     if (updates.modelId !== undefined) cfg.modelId = updates.modelId;
     if (updates.memorySize !== undefined) cfg.memorySize = updates.memorySize;
+    if (updates.customPrompt !== undefined) cfg.customPrompt = updates.customPrompt;
     warehouses.set(id, cfg);
     writeWarehouses(warehouses);
     return { success: true };

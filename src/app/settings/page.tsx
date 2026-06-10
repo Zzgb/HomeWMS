@@ -78,6 +78,7 @@ interface Task {
 interface StoreConfig {
   modelId?: string;
   memorySize?: number;
+  customPrompt?: string;
 }
 
 const PROVIDERS = [
@@ -134,6 +135,7 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [customModelInput, setCustomModelInput] = useState("");
   const [savingModel, setSavingModel] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
 
   // Warehouses tab state
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
@@ -209,6 +211,9 @@ export default function SettingsPage() {
         if (data?.memorySize) {
           setMemorySize(data.memorySize);
         }
+        if (data?.customPrompt !== undefined) {
+          setCustomPrompt(data.customPrompt);
+        }
         setLoadingConfig(false);
       })
       .catch(() => setLoadingConfig(false));
@@ -248,14 +253,14 @@ export default function SettingsPage() {
       await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: modelToSave }),
+        body: JSON.stringify({ modelId: modelToSave, customPrompt: customPrompt || null }),
       });
     } catch {
       // Ignore
     } finally {
       setSavingModel(false);
     }
-  }, [storeId, selectedModel]);
+  }, [storeId, selectedModel, customPrompt]);
 
   // Warehouses tab handlers
   const openCreateWarehouse = useCallback(() => {
@@ -655,6 +660,19 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="custom-prompt">自定义提示词</Label>
+                    <textarea
+                      id="custom-prompt"
+                      rows={6}
+                      className="flex w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      placeholder="留空则使用默认提示词..."
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">自定义 AI 助手的系统提示词。留空则使用系统默认。</p>
                   </div>
 
                   <Button

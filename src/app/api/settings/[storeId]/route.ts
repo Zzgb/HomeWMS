@@ -20,6 +20,7 @@ export async function GET(
     return NextResponse.json({
       modelId: config.modelId || "",
       memorySize: config.memorySize || 200,
+      customPrompt: config.customPrompt || "",
     });
   } catch (error) {
     console.error("GET /api/settings/[storeId] error:", error);
@@ -37,12 +38,13 @@ export async function PUT(
   try {
     const { storeId } = await params;
     const body = await request.json();
-    const { name, modelId, memorySize } = body;
+    const { name, modelId, memorySize, customPrompt } = body;
 
     const result = updateWarehouse(storeId, {
       ...(name !== undefined ? { name } : {}),
       ...(modelId !== undefined ? { modelId } : {}),
       ...(memorySize !== undefined ? { memorySize: Number(memorySize) } : {}),
+      ...(customPrompt !== undefined ? { customPrompt } : {}),
     });
     if (!result.success) {
       return NextResponse.json(

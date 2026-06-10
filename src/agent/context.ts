@@ -8,7 +8,8 @@ export async function assembleContext(
   prisma: PrismaClient,
   warehouseName: string,
   memorySize?: number,
-  aiName?: string
+  aiName?: string,
+  storeId?: string
 ): Promise<{
   system: string;
   messages: ModelMessage[];
@@ -23,12 +24,25 @@ export async function assembleContext(
     console.error("Failed to fetch messages:", e);
   }
 
+  // Allow warehouse-level custom prompt override
+  let basePrompt = SYSTEM_PROMPT;
+  if (storeId) {
+    try {
+      const { getWarehouseConfig } = await import("@/lib/connections");
+      const cfg = getWarehouseConfig(storeId);
+      if (cfg?.customPrompt) basePrompt = cfg.customPrompt;
+    } catch {}
+  }
+
   // Build system prompt
-  let system = SYSTEM_PROMPT;
+  let system = basePrompt;
+  const today = new Date().toISOString().slice(0, 10);
+
   if (aiName) {
     system = `## YOUR CURRENT NAME: ${aiName}\nThis value comes from the database. If the user asks to rename you, call setAiName.\n\n` + system;
   }
   system += `\n\nCurrent warehouse: ${warehouseName}`;
+  system += `\nToday's date: ${today} (use this to determine if expiry dates are in the past)`;
 
   // Convert to ModelMessage format
   const messages: ModelMessage[] = recentMessages.map((msg) => ({

@@ -35,7 +35,7 @@ export function makeMoveItemTool(prisma: PrismaClient) {
         }
         return result;
       } catch (e: any) {
-        return { success: false, message: `移动失败: ${e.message || "未知错误"}` };
+        return { success: false, message: `Move failed: ${e.message || "Unknown error"}` };
       }
     },
   });

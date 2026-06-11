@@ -9,6 +9,7 @@ import { makeMoveItemTool } from "./moveItem";
 import { makeCheckStockTool } from "./checkStock";
 import { makeSetAiNameTool } from "./setAiName";
 import { makeDeleteItemTool } from "./deleteItem";
+import { makeSplitItemTool } from "./splitItem";
 import { makeUpdateStockTool } from "./updateStock";
 
 /**
@@ -25,6 +26,7 @@ export function createToolDefinitions(prisma: PrismaClient) {
     stockIn: makeStockInTool(prisma),
     consumeItem: makeConsumeItemTool(prisma),
     moveItem: makeMoveItemTool(prisma),
+    splitItem: makeSplitItemTool(prisma),
     checkStock: makeCheckStockTool(prisma),
     setAiName: makeSetAiNameTool(prisma),
     deleteItem: makeDeleteItemTool(prisma),

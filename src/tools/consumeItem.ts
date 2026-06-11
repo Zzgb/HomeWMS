@@ -36,7 +36,7 @@ export function makeConsumeItemTool(prisma: PrismaClient) {
         }
         return result;
       } catch (e: any) {
-        return { success: false, message: `出库失败: ${e.message || "未知错误"}` };
+        return { success: false, message: `Consume failed: ${e.message || "Unknown error"}` };
       }
     },
   });

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,8 +40,10 @@ export default function ChatPage() {
   const [storeError, setStoreError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [aiName, setAiName] = useState("小鞠");
+  const { t } = useT();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
   // Cache fallback timestamps per message id so they don't bounce during streaming re-renders
   const fallbackTimestamps = useRef<Map<string, Date>>(new Map());
 
@@ -123,8 +126,31 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // After each turn completes, reload history to get DB timestamps
-  // useChat streaming messages lack createdAt — this fills them in
+  // Reload full history from DB (timestamps + correction messages from L5)
+  const reloadHistory = useCallback(() => {
+    if (!storeId) return;
+    fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=200`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.messages?.length > 0) {
+          setMessages(data.messages.map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.createdAt,
+            aiName: m.aiName,
+            parts: [{ type: "text", text: m.content || "" }],
+          })));
+          const lastAssistant = [...data.messages].reverse().find((m: any) => m.role === "assistant" && m.aiName);
+          if (lastAssistant?.aiName) setAiName(lastAssistant.aiName);
+        }
+      })
+      .catch(() => {});
+  }, [storeId, setMessages]);
+
+  // After each turn completes, reload history in two stages:
+  // 500ms: pick up DB timestamps (useChat streaming messages lack createdAt)
+  // 3000ms: pick up L5 self-correction messages
   const prevStatusRef = useRef(status);
   useEffect(() => {
     if (!storeId) return;
@@ -132,27 +158,11 @@ export default function ChatPage() {
     prevStatusRef.current = status;
     if (!wasLoading || status !== "ready") return;
 
-    const timer = setTimeout(() => {
-      fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=200`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.messages?.length > 0) {
-            setMessages(data.messages.map((m: any) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              createdAt: m.createdAt,
-              aiName: m.aiName,
-              parts: [{ type: "text", text: m.content || "" }],
-            })));
-            const lastAssistant = [...data.messages].reverse().find((m: any) => m.role === "assistant" && m.aiName);
-            if (lastAssistant?.aiName) setAiName(lastAssistant.aiName);
-          }
-        })
-        .catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [status, storeId]);
+    const t1 = setTimeout(reloadHistory, 500);
+    const t2 = setTimeout(reloadHistory, 1200);
+    const t3 = setTimeout(reloadHistory, 2200);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [status, storeId, reloadHistory]);
 
   const handleStoreSelect = useCallback((val: string) => {
     setStoreId(val);
@@ -178,33 +188,33 @@ export default function ChatPage() {
           <CardContent className="pt-6 space-y-4">
             <div className="text-center space-y-2">
               <Package className="mx-auto h-10 w-10 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">选择仓库</h2>
+              <h2 className="text-lg font-semibold">{t("select.warehouse")}</h2>
               <p className="text-sm text-muted-foreground">
-                选择一个仓库开始对话...
+                {t("chat.select.desc")}
               </p>
             </div>
             {loadingStores ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-sm text-muted-foreground">
-                  加载仓库中...
+                  {t("loading.stores")}
                 </span>
               </div>
             ) : storeError ? (
               <div className="text-center text-destructive text-sm py-2">
-                加载仓库失败：{storeError}
+                {t("chat.error")}: {storeError}
               </div>
             ) : stores.length === 0 ? (
               <div className="text-center py-4 space-y-3">
-                <p className="text-sm text-muted-foreground">还没有仓库</p>
+                <p className="text-sm text-muted-foreground">{t("no.warehouse")}</p>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/settings">去设置页添加仓库</Link>
+                  <Link href="/settings">{t("settings.title")}</Link>
                 </Button>
               </div>
             ) : (
               <Select onValueChange={handleStoreSelect}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择仓库..." />
+                  <SelectValue placeholder={t("select.warehouse") + "..."} />
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (
@@ -255,7 +265,7 @@ export default function ChatPage() {
               <div className="text-center space-y-2">
                 <Bot className="mx-auto h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  开始与仓库助手对话，例如：「我拿了3节18650电池」
+                  {t("chat.placeholder")}
                 </p>
               </div>
             </div>
@@ -281,7 +291,7 @@ export default function ChatPage() {
               >
                 <div
                   className={cn(
-                    "flex flex-col gap-1.5 max-w-[75%]",
+                    "flex flex-col gap-1.5 max-w-[85%]",
                     msg.role === "user" ? "items-end" : "items-start"
                   )}
                 >
@@ -298,7 +308,7 @@ export default function ChatPage() {
                       ) : (
                         <Bot className="h-3 w-3" />
                       )}
-                      {msg.role === "user" ? "你" : ((msg as any).aiName || "小鞠")}
+                      {msg.role === "user" ? t("you") : ((msg as any).aiName || "小鞠")}
                     </Badge>
                     <span className="text-[10px] text-muted-foreground">
                       {(() => {
@@ -314,17 +324,20 @@ export default function ChatPage() {
                   </div>
 
                   {/* Text content */}
-                  {textContent && (
+                  {(textContent || (status === "streaming" && msg.role === "assistant" && msg.id === messages[messages.length-1]?.id)) && (
                     <Card
                       className={cn(
-                        "w-fit max-w-[75%]",
+                        "max-w-full",
                         msg.role === "user"
                           ? "bg-primary/90 text-primary-foreground backdrop-blur-sm ml-auto"
                           : "bg-card/60 backdrop-blur-sm border-border/50"
                       )}
                     >
-                      <CardContent className="p-3 text-sm whitespace-pre-wrap">
+                      <CardContent className="p-3 text-sm whitespace-pre-wrap break-words">
                         {textContent}
+                        {status === "streaming" && msg.role === "assistant" && msg.id === messages[messages.length-1]?.id && (
+                          <span className="animate-pulse">...</span>
+                        )}
                       </CardContent>
                     </Card>
                   )}
@@ -333,12 +346,31 @@ export default function ChatPage() {
             );
           })}
 
+          {/* Placeholder bubble while waiting for first token */}
+          {isLoading && messages.length > 0 && messages[messages.length-1]?.role === "user" && (
+            <div className="flex gap-3 justify-start">
+              <div className="flex flex-col gap-1.5 max-w-[75%] items-start">
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    <Bot className="h-3 w-3" />
+                    {aiName}
+                  </Badge>
+                </div>
+                <Card className="w-fit max-w-[75%] bg-card/60 backdrop-blur-sm border-border/50">
+                  <CardContent className="p-3 text-sm">
+                    <span className="animate-pulse">...</span>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
+
           {/* Error display */}
           {error && (
             <div className="flex justify-center">
               <Card className="border-destructive bg-destructive/10">
                 <CardContent className="p-3 text-sm text-destructive">
-                  {error.message || "对话出错"}
+                  {error.message || t("chat.error")}
                 </CardContent>
               </Card>
             </div>
@@ -355,13 +387,15 @@ export default function ChatPage() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={
-              isLoading ? "AI 思考中..." : "输入消息..."
+              isLoading ? t("ai.thinking") : t("type.message")
             }
             disabled={isLoading}
             className="min-h-[80px] max-h-[160px] resize-none"
             rows={1}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={() => { setTimeout(() => { isComposingRef.current = false; }, 0); }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (e.key === "Enter" && !e.shiftKey && !isComposingRef.current && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 handleSend(e as unknown as React.FormEvent);
               }

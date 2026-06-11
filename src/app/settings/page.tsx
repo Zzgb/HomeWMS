@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { DEFAULT_MEMORY_SIZE } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -123,15 +124,15 @@ const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
 const LANGUAGE_OPTIONS = [
   { value: "en", label: "English" },
   { value: "zh", label: "中文" },
-  { value: "ja", label: "日本語" },
 ];
 
-const TASK_TYPES = [
-  { value: "check_stock", label: "自动盘点" },
-  { value: "expiry_check", label: "保质期检查" },
-];
+const TASK_TYPE_KEYS: Record<string, string> = {
+  check_stock: "settings.tasks.type.checkStock",
+  expiry_check: "settings.tasks.type.expiryCheck",
+};
 
 export default function SettingsPage() {
+  const { t } = useT();
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -394,7 +395,7 @@ export default function SettingsPage() {
       }
       const saveData = await saveRes.json();
       if (!saveRes.ok) {
-        setWhTestResult({ success: false, message: "保存失败", error: saveData.error || "未知错误" });
+        setWhTestResult({ success: false, message: t("conn.fail"), error: saveData.error || "Unknown error" });
         setSavingWarehouse(false);
         return;
       }
@@ -412,7 +413,7 @@ export default function SettingsPage() {
       setWhTestResult(null);
       return;
     } catch (e: any) {
-      setWhTestResult({ success: false, message: "保存失败", error: e?.message || String(e) });
+      setWhTestResult({ success: false, message: t("conn.fail"), error: e?.message || String(e) });
     } finally {
       setSavingWarehouse(false);
     }
@@ -441,7 +442,7 @@ export default function SettingsPage() {
   const handleSaveMemory = useCallback(async () => {
     if (!storeId) return;
     if (contextMode !== "recent" && !summaryEnabled) {
-      alert("当前上下文模式需要启用摘要压缩，请先开启摘要压缩后再保存。");
+      alert(t("settings.memory.alert"));
       return;
     }
     setSavingMemory(true);
@@ -560,7 +561,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">设置</h1>
+          <h1 className="text-xl font-semibold">{t("settings.title")}</h1>
           {currentStore && (
             <p className="text-sm text-muted-foreground">
               {currentStore.name}
@@ -587,23 +588,23 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="model" className="gap-1.5">
             <Bot className="h-4 w-4" />
-            模型
+            {t("settings.model")}
           </TabsTrigger>
           <TabsTrigger value="warehouses" className="gap-1.5">
             <Wrench className="h-4 w-4" />
-            仓库管理
+            {t("settings.warehouses")}
           </TabsTrigger>
           <TabsTrigger value="memory" className="gap-1.5">
             <Brain className="h-4 w-4" />
-            记忆策略
+            {t("settings.memory")}
           </TabsTrigger>
           <TabsTrigger value="tasks" className="gap-1.5">
             <Calendar className="h-4 w-4" />
-            定时任务
+            {t("settings.tasks")}
           </TabsTrigger>
           <TabsTrigger value="language" className="gap-1.5">
             <Globe className="h-4 w-4" />
-            语言
+            {t("settings.language")}
           </TabsTrigger>
         </TabsList>
 
@@ -612,23 +613,23 @@ export default function SettingsPage() {
           <Card className="bg-background/60 backdrop-blur-md border-border/50">
             <CardHeader>
               <CardTitle className="text-base">
-                AI 模型配置
+                {t("settings.model.title")}
               </CardTitle>
               <CardDescription>
-                选择 AI 服务商和模型用于对话助手。
+                {t("settings.model.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {loadingConfig ? (
                 <div className="flex items-center gap-2 text-muted-foreground py-4">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  加载配置中...
+                  {t("loading.config")}
                 </div>
               ) : (
                 <>
                   {config.modelId && (
                     <div className="flex items-center gap-2 text-sm">
-                      <Badge variant="secondary">当前</Badge>
+                      <Badge variant="secondary">{t("settings.model.current")}</Badge>
                       <span className="text-muted-foreground">
                         {config.modelId}
                       </span>
@@ -637,14 +638,14 @@ export default function SettingsPage() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>服务商</Label>
+                      <Label>{t("settings.model.provider")}</Label>
                       <Select
                         value={selectedProvider}
                         onValueChange={handleProviderChange}
                       >
                         <SelectTrigger className="w-full max-w-xs">
                           <SelectValue>
-                            {PROVIDERS.find((p) => p.value === selectedProvider)?.label || "选择服务商..."}
+                            {PROVIDERS.find((p) => p.value === selectedProvider)?.label || t("settings.model.provider.placeholder")}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -658,7 +659,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>模型</Label>
+                      <Label>{t("settings.model.id")}</Label>
                       <Select
                         value={selectedModel}
                         onValueChange={setSelectedModel}
@@ -667,8 +668,8 @@ export default function SettingsPage() {
                         <SelectTrigger className="w-full max-w-xs">
                           <SelectValue>
                             {selectedModel === "__custom__"
-                              ? "自定义模型..."
-                              : (MODELS_BY_PROVIDER[selectedProvider] ?? []).find((m: any) => m.value === selectedModel)?.label || selectedModel || "选择模型..."}
+                              ? t("settings.model.custom")
+                              : (MODELS_BY_PROVIDER[selectedProvider] ?? []).find((m: any) => m.value === selectedModel)?.label || selectedModel || t("settings.model.id.placeholder")}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -679,38 +680,38 @@ export default function SettingsPage() {
                               </SelectItem>
                             )
                           )}
-                          <SelectItem value="__custom__">自定义模型...</SelectItem>
+                          <SelectItem value="__custom__">{t("settings.model.custom")}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     {selectedModel === "__custom__" && (
                       <div className="space-y-2">
-                        <Label>自定义模型 ID</Label>
+                        <Label>{t("settings.model.customId")}</Label>
                         <Input
-                          placeholder="例如：deepseek/deepseek-v4-pro"
+                          placeholder={t("settings.model.customId.placeholder")}
                           value={customModelInput}
                           onChange={(e) => setCustomModelInput(e.target.value)}
                           className="max-w-xs"
                         />
                         <p className="text-xs text-muted-foreground">
-                          输入格式：服务商/模型名，如 openai/gpt-4o-mini
+                          {t("settings.model.customId.desc")}
                         </p>
                       </div>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="custom-prompt">自定义提示词</Label>
+                    <Label htmlFor="custom-prompt">{t("settings.model.prompt")}</Label>
                     <textarea
                       id="custom-prompt"
                       rows={6}
                       className="flex w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      placeholder="加载中..."
+                      placeholder={t("settings.model.prompt.placeholder")}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">自定义 AI 助手的系统提示词。留空则使用系统默认。</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.model.prompt.desc")}</p>
                   </div>
 
                   <Button
@@ -721,7 +722,7 @@ export default function SettingsPage() {
                       <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                     )}
                     <Check className="h-4 w-4 mr-1.5" />
-                    保存模型
+                    {t("settings.model.save")}
                   </Button>
                 </>
               )}
@@ -733,15 +734,15 @@ export default function SettingsPage() {
         <TabsContent value="warehouses" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">
-              {stores.length} 个仓库
+              {t("settings.wh.count", { n: stores.length })}
             </h3>
             <Button size="sm" onClick={openCreateWarehouse}>
               <Plus className="h-4 w-4 mr-1" />
-              添加仓库
+              {t("settings.wh.add")}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground font-mono">
-            配置文件：warehouses.json（项目根目录）
+            {t("settings.wh.config")}
           </p>
 
           {stores.length === 0 ? (
@@ -749,7 +750,7 @@ export default function SettingsPage() {
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Wrench className="h-8 w-8 mb-2" />
                 <p className="text-sm">
-                  暂无仓库，请创建第一个。
+                  {t("settings.wh.empty")}
                 </p>
               </CardContent>
             </Card>
@@ -766,7 +767,7 @@ export default function SettingsPage() {
                             postgresql://{store.user ?? "postgres"}@{store.host}:{store.port ?? 5432}/{store.database}
                           </CardDescription>
                         ) : (
-                          <CardDescription>暂无连接信息</CardDescription>
+                          <CardDescription>{t("settings.wh.noConn")}</CardDescription>
                         )}
                       </div>
                       <div className="flex gap-1 shrink-0">
@@ -801,9 +802,9 @@ export default function SettingsPage() {
           >
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>删除仓库</DialogTitle>
+                <DialogTitle>{t("settings.wh.delete.title")}</DialogTitle>
                 <DialogDescription>
-                  确定要删除这个仓库吗？此操作不可撤销，所有关联的库存数据将被永久删除。
+                  {t("settings.wh.delete.confirm")}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -811,7 +812,7 @@ export default function SettingsPage() {
                   variant="outline"
                   onClick={() => setDeleteConfirmId(null)}
                 >
-                  取消
+                  {t("cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -819,7 +820,7 @@ export default function SettingsPage() {
                     deleteConfirmId && handleDeleteWarehouse(deleteConfirmId)
                   }
                 >
-                  删除
+                  {t("delete")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -833,26 +834,26 @@ export default function SettingsPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  {editingWarehouse ? "编辑仓库" : "添加仓库"}
+                  {editingWarehouse ? t("settings.wh.edit.title") : t("settings.wh.create.title")}
                 </DialogTitle>
                 <DialogDescription>
                   {editingWarehouse
-                    ? "更新 PostgreSQL 连接信息"
-                    : "配置 PostgreSQL 数据库连接创建新仓库"}
+                    ? t("settings.wh.edit.desc")
+                    : t("settings.wh.create.desc")}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="wh-name">仓库名称</Label>
+                  <Label htmlFor="wh-name">{t("settings.wh.name")}</Label>
                   <Input
                     id="wh-name"
                     value={whFormName}
                     onChange={(e) => setWhFormName(e.target.value)}
-                    placeholder="例如：主仓库"
+                    placeholder={t("settings.wh.name.placeholder")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-host">主机</Label>
+                  <Label htmlFor="wh-host">{t("settings.wh.host")}</Label>
                   <Input
                     id="wh-host"
                     value={whFormHost}
@@ -861,7 +862,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-port">端口</Label>
+                  <Label htmlFor="wh-port">{t("settings.wh.port")}</Label>
                   <Input
                     id="wh-port"
                     value={whFormPort}
@@ -870,7 +871,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-user">用户名</Label>
+                  <Label htmlFor="wh-user">{t("settings.wh.user")}</Label>
                   <Input
                     id="wh-user"
                     value={whFormUser}
@@ -879,22 +880,22 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-password">密码</Label>
+                  <Label htmlFor="wh-password">{t("settings.wh.password")}</Label>
                   <Input
                     id="wh-password"
                     type="password"
                     value={whFormPassword}
                     onChange={(e) => setWhFormPassword(e.target.value)}
-                    placeholder="输入密码"
+                    placeholder={t("settings.wh.password.placeholder")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="wh-database">数据库名</Label>
+                  <Label htmlFor="wh-database">{t("settings.wh.database")}</Label>
                   <Input
                     id="wh-database"
                     value={whFormDatabase}
                     onChange={(e) => setWhFormDatabase(e.target.value)}
-                    placeholder="输入数据库名"
+                    placeholder={t("settings.wh.database.placeholder")}
                   />
                 </div>
 
@@ -913,7 +914,7 @@ export default function SettingsPage() {
                     ) : (
                       <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                     )}
-                    <span>{whTestResult.success ? whTestResult.message || "连接成功" : whTestResult.error || whTestResult.message || "连接失败"}</span>
+                    <span>{whTestResult.success ? whTestResult.message || t("conn.success") : whTestResult.error || whTestResult.message || t("conn.fail")}</span>
                   </div>
                 )}
               </div>
@@ -922,7 +923,7 @@ export default function SettingsPage() {
                   variant="outline"
                   onClick={() => setWarehouseDialogOpen(false)}
                 >
-                  取消
+                  {t("cancel")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -932,7 +933,7 @@ export default function SettingsPage() {
                   {whTestLoading && (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                   )}
-                  测试连接
+                  {t("test.connection")}
                 </Button>
                 <Button
                   onClick={handleSaveWarehouse}
@@ -941,7 +942,7 @@ export default function SettingsPage() {
                   {savingWarehouse && (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                   )}
-                  保存
+                  {t("save")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -952,37 +953,37 @@ export default function SettingsPage() {
         <TabsContent value="memory" className="space-y-4">
           <Card className="bg-background/60 backdrop-blur-md border-border/50">
             <CardHeader>
-              <CardTitle className="text-base">记忆设置</CardTitle>
+              <CardTitle className="text-base">{t("settings.memory.title")}</CardTitle>
               <CardDescription>
-                选择上下文模式并调整对应参数。模式决定 AI 获取历史信息的方式：原始消息或压缩摘要。
+                {t("settings.memory.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {loadingConfig ? (
                 <div className="flex items-center gap-2 text-muted-foreground py-4">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  加载配置中...
+                  {t("loading.config")}
                 </div>
               ) : (
                 <>
                   {/* Context mode selector */}
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>上下文模式</Label>
+                      <Label>{t("settings.memory.contextMode")}</Label>
                       <p className="text-xs text-muted-foreground">
-                        选择 AI 上下文窗口包含哪些内容
+                        {t("settings.memory.contextMode.desc")}
                       </p>
                     </div>
                     <Select value={contextMode} onValueChange={setContextMode}>
                       <SelectTrigger className="w-44 h-8 text-xs">
                         <SelectValue>
-                          {{ recent: "仅短期记忆", summary: "仅压缩摘要", hybrid: "短期记忆 + 摘要" }[contextMode] || contextMode}
+                          {{ recent: t("settings.memory.mode.recent"), summary: t("settings.memory.mode.summary"), hybrid: t("settings.memory.mode.hybrid") }[contextMode] || contextMode}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="recent">仅短期记忆</SelectItem>
-                        <SelectItem value="summary">仅压缩摘要</SelectItem>
-                        <SelectItem value="hybrid">短期记忆 + 摘要</SelectItem>
+                        <SelectItem value="recent">{t("settings.memory.mode.recent")}</SelectItem>
+                        <SelectItem value="summary">{t("settings.memory.mode.summary")}</SelectItem>
+                        <SelectItem value="hybrid">{t("settings.memory.mode.hybrid")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -990,12 +991,12 @@ export default function SettingsPage() {
                   {/* Short-term memory: shown for recent and hybrid */}
                   {(contextMode === "recent" || contextMode === "hybrid") && (
                     <div className="space-y-3 border-t border-border/50 pt-4 pl-3 border-l-2 border-l-primary/30">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">短期记忆</div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("settings.memory.shortTerm")}</div>
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <Label className="text-sm">上下文条数</Label>
+                          <Label className="text-sm">{t("settings.memory.size")}</Label>
                           <p className="text-xs text-muted-foreground">
-                            保留最近 N 条原始消息到上下文窗口
+                            {t("settings.memory.size.desc")}
                           </p>
                         </div>
                         <Input
@@ -1028,12 +1029,12 @@ export default function SettingsPage() {
                   {/* Summary compression: shown for summary and hybrid */}
                   {(contextMode === "summary" || contextMode === "hybrid") && (
                     <div className="space-y-3 border-t border-border/50 pt-4 pl-3 border-l-2 border-l-primary/30">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">摘要压缩</div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("settings.memory.summary")}</div>
                       <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
-                          <Label className="text-sm">启用</Label>
+                          <Label className="text-sm">{t("settings.memory.enabled")}</Label>
                           <p className="text-xs text-muted-foreground">
-                            将历史 DB 操作自动压缩为英文摘要
+                            {t("settings.memory.enabled.desc")}
                           </p>
                         </div>
                         <Switch
@@ -1047,9 +1048,9 @@ export default function SettingsPage() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="space-y-0.5">
-                                <Label className="text-sm">触发阈值</Label>
+                                <Label className="text-sm">{t("settings.memory.threshold")}</Label>
                                 <p className="text-xs text-muted-foreground">
-                                  新消息数超过此阈值时触发摘要生成
+                                  {t("settings.memory.threshold.desc")}
                                 </p>
                               </div>
                               <Input
@@ -1081,9 +1082,9 @@ export default function SettingsPage() {
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="space-y-0.5">
-                                <Label className="text-sm">上下文条数</Label>
+                                <Label className="text-sm">{t("settings.memory.summaryCount")}</Label>
                                 <p className="text-xs text-muted-foreground">
-                                  上下文窗口中包含的最近摘要数量
+                                  {t("settings.memory.summaryCount.desc")}
                                 </p>
                               </div>
                               <Input
@@ -1120,9 +1121,9 @@ export default function SettingsPage() {
                   <div className="border-t border-border/50 pt-4">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>调试模式</Label>
+                        <Label>{t("settings.memory.debug")}</Label>
                         <p className="text-xs text-muted-foreground">
-                          开启后每次对话的完整上下文会写入操作日志
+                          {t("settings.memory.debug.desc")}
                         </p>
                       </div>
                       <Switch
@@ -1137,7 +1138,7 @@ export default function SettingsPage() {
                       <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                     )}
                     <Check className="h-4 w-4 mr-1.5" />
-                    保存
+                    {t("save")}
                   </Button>
                 </>
               )}
@@ -1149,11 +1150,11 @@ export default function SettingsPage() {
         <TabsContent value="tasks" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">
-              {tasks.length} 个定时任务
+              {t("settings.tasks.count", { n: tasks.length })}
             </h3>
             <Button size="sm" onClick={openCreateTask}>
               <Plus className="h-4 w-4 mr-1" />
-              添加任务
+              {t("settings.tasks.add")}
             </Button>
           </div>
 
@@ -1162,7 +1163,7 @@ export default function SettingsPage() {
               <CardContent className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-muted-foreground">
-                  加载任务中...
+                  {t("loading.tasks")}
                 </span>
               </CardContent>
             </Card>
@@ -1171,7 +1172,7 @@ export default function SettingsPage() {
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Calendar className="h-8 w-8 mb-2" />
                 <p className="text-sm">
-                  暂无定时任务，创建一个来自动化盘点。
+                  {t("settings.tasks.empty")}
                 </p>
               </CardContent>
             </Card>
@@ -1183,7 +1184,7 @@ export default function SettingsPage() {
                     <div className="flex items-start justify-between">
                       <div className="space-y-1">
                         <Badge variant="secondary" className="text-xs">
-                          {TASK_TYPES.find(t => t.value === task.type)?.label ?? task.type}
+                          {t(TASK_TYPE_KEYS[task.type] ?? task.type)}
                         </Badge>
                         <CardTitle className="text-sm font-mono">
                           {task.cron}
@@ -1214,8 +1215,8 @@ export default function SettingsPage() {
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
                         {task.lastRun
-                          ? `上次：${new Date(task.lastRun).toLocaleString()}`
-                          : "从未执行"}
+                          ? `${t("settings.tasks.lastRun")}: ${new Date(task.lastRun).toLocaleString()}`
+                          : t("settings.tasks.neverRun")}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1224,7 +1225,7 @@ export default function SettingsPage() {
                         onCheckedChange={() => handleTaskToggle(task)}
                       />
                       <Label className="text-xs text-muted-foreground">
-                        {task.enabled ? "启用" : "禁用"}
+                        {task.enabled ? t("enable") : t("disable")}
                       </Label>
                     </div>
                   </CardContent>
@@ -1240,9 +1241,9 @@ export default function SettingsPage() {
           >
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>删除任务</DialogTitle>
+                <DialogTitle>{t("settings.tasks.delete.title")}</DialogTitle>
                 <DialogDescription>
-                  确定要删除这个定时任务吗？
+                  {t("settings.tasks.delete.confirm")}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
@@ -1250,7 +1251,7 @@ export default function SettingsPage() {
                   variant="outline"
                   onClick={() => setDeleteTaskId(null)}
                 >
-                  取消
+                  {t("cancel")}
                 </Button>
                 <Button
                   variant="destructive"
@@ -1258,7 +1259,7 @@ export default function SettingsPage() {
                     deleteTaskId && handleDeleteTask(deleteTaskId)
                   }
                 >
-                  删除
+                  {t("delete")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1269,40 +1270,40 @@ export default function SettingsPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  {editingTask ? "编辑任务" : "添加任务"}
+                  {editingTask ? t("settings.tasks.edit.title") : t("settings.tasks.create.title")}
                 </DialogTitle>
                 <DialogDescription>
-                  为该仓库安排一个自动化任务。
+                  {t("settings.tasks.create.desc")}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="task-type">类型</Label>
+                  <Label htmlFor="task-type">{t("settings.tasks.type")}</Label>
                   <Select value={taskType} onValueChange={setTaskType}>
                     <SelectTrigger id="task-type">
                       <SelectValue>
-                        {TASK_TYPES.find((t) => t.value === taskType)?.label || taskType}
+                        {t(TASK_TYPE_KEYS[taskType] ?? taskType)}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {TASK_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
+                      {Object.entries(TASK_TYPE_KEYS).map(([value, key]) => (
+                        <SelectItem key={value} value={value}>
+                          {t(key)}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="task-cron">执行周期</Label>
+                  <Label htmlFor="task-cron">{t("settings.tasks.cron")}</Label>
                   <Input
                     id="task-cron"
                     value={taskCron}
                     onChange={(e) => setTaskCron(e.target.value)}
-                    placeholder="e.g. 0 9 * * *"
+                    placeholder={t("settings.tasks.cron.placeholder")}
                   />
                   <p className="text-xs text-muted-foreground">
-                    标准 cron 格式：分钟 小时 日 月 星期
+                    {t("settings.tasks.cron.desc")}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1311,7 +1312,7 @@ export default function SettingsPage() {
                     checked={taskEnabled}
                     onCheckedChange={setTaskEnabled}
                   />
-                  <Label htmlFor="task-enabled">已启用</Label>
+                  <Label htmlFor="task-enabled">{t("settings.tasks.enabled")}</Label>
                 </div>
               </div>
               <DialogFooter>
@@ -1319,7 +1320,7 @@ export default function SettingsPage() {
                   variant="outline"
                   onClick={() => setTaskDialogOpen(false)}
                 >
-                  取消
+                  {t("cancel")}
                 </Button>
                 <Button
                   onClick={handleSaveTask}
@@ -1328,7 +1329,7 @@ export default function SettingsPage() {
                   {savingTask && (
                     <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                   )}
-                  {editingTask ? "保存更改" : "创建"}
+                  {editingTask ? t("save.changes") : t("create")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1340,15 +1341,15 @@ export default function SettingsPage() {
           <Card className="bg-background/60 backdrop-blur-md border-border/50">
             <CardHeader>
               <CardTitle className="text-base">
-                AI 回复语言
+                {t("settings.lang.title")}
               </CardTitle>
               <CardDescription>
-                选择 AI 助手的回复语言。
+                {t("settings.lang.desc")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Label>语言</Label>
+                <Label>{t("settings.lang.label")}</Label>
                 <Select
                   value={language}
                   onValueChange={handleLanguageChange}

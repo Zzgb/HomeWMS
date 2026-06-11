@@ -28,7 +28,6 @@ export async function assembleContext(
   const LANG_MAP: Record<string, string> = {
     zh: "You MUST reply in Chinese (中文). All responses must be in Chinese.",
     en: "You MUST reply in English. All responses must be in English.",
-    ja: "You MUST reply in Japanese (日本語). All responses must be in Japanese.",
   };
   system += `\n\n${LANG_MAP[language || "zh"] || LANG_MAP.zh}`;
 
@@ -88,12 +87,43 @@ export async function assembleContext(
   ];
 
   // Add reply instruction
-  finalMessages.push({
-    role: "system",
-    content:
-      "Use the verified DB results above. Generate a natural language response. " +
-      "Do NOT fabricate data. If context conflicts, note the correction.",
-  });
+  const hasOnlyQuery = toolResults.length > 0 && toolResults.every((r) => r.toolName === "findItem" || r.toolName === "checkStock");
+  const hasFailedMutation = toolResults.some(
+    (r) => ["deleteItem", "consumeItem", "stockIn", "moveItem"].includes(r.toolName) && !r.success
+  );
+
+  if (hasFailedMutation) {
+    finalMessages.push({
+      role: "system",
+      content:
+        "❌ A mutation operation (delete/consume/stockIn/move) FAILED. " +
+        "The database was NOT changed. Do NOT claim success or ✅. " +
+        "Tell the user the operation FAILED and report the actual error.",
+    });
+  } else if (hasOnlyQuery) {
+    finalMessages.push({
+      role: "system",
+      content:
+        "⚠️ You CANNOT delete, modify, or move any items. You only have QUERY results. " +
+        "ONLY report what the database shows. Do NOT claim you performed any operation. " +
+        "If the user wants to delete/clear items, tell them which items exist and ask which to delete.",
+    });
+  } else if (toolResults.length > 0) {
+    finalMessages.push({
+      role: "system",
+      content:
+        "Use the verified DB results above. Generate a natural language response. " +
+        "Do NOT fabricate data. If context conflicts, note the correction.",
+    });
+  } else {
+    finalMessages.push({
+      role: "system",
+      content:
+        "⚠️ No database tools were executed for this message. " +
+        "You have NO verified data. Do NOT claim you checked, moved, or performed any action. " +
+        "Only respond conversationally. If the user needs inventory changes, tell them to rephrase.",
+    });
+  }
 
   return { finalMessages, conflicts, system };
 }

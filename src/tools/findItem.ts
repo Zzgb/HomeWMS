@@ -26,7 +26,7 @@ export function makeFindItemTool(prisma: PrismaClient) {
           await prisma.log.create({
             data: { action: "query", note: `搜索: "${k}", 仓库为空` },
           }).catch(() => {});
-          return { found: false, keyword: k, message: "仓库中还没有物品", items: [] };
+          return { found: false, keyword: k, message: "No items in warehouse", items: [] };
         }
 
         // Use LLM to map keyword (possibly Chinese) to the correct DB name
@@ -35,14 +35,16 @@ export function makeFindItemTool(prisma: PrismaClient) {
           items = allItems.filter((i) => i.name.toLowerCase() === resolved.toLowerCase());
         }
 
-        // LLM resolution failed — keyword doesn't match any item. Return failure with available items.
+        // LLM resolution failed — item not found. Return success:true so
+        // the orchestrator continues (stockIn auto-creates items).
+        // The mutation tool itself validates whether the item must pre-exist.
         if (items.length === 0) {
           const now = new Date();
           return {
             found: false,
-            success: false,
+            success: true,
             keyword: k,
-            message: `❌ "${k}" 不在仓库中。当前物品: ${allItems.map(i => i.name).join(", ")}`,
+            message: `"${k}" not found in warehouse. Available: ${allItems.map(i => i.name).join(", ")}`,
             items: allItems.map((item) => ({
               name: item.name,
               category: item.category,
@@ -70,7 +72,7 @@ export function makeFindItemTool(prisma: PrismaClient) {
       }).catch(() => {});
 
       if (!items.length) {
-        return { found: false, keyword: k, message: "仓库中还没有物品", items: [] };
+        return { found: false, keyword: k, message: "No items in warehouse", items: [] };
       }
 
       const now = new Date();

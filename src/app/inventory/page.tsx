@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,14 +58,14 @@ function formatDate(dateStr: string): string {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    normal: "正常",
-    damaged: "损坏",
-    expired: "过期",
+    normal: "status.normal",
+    damaged: "status.damaged",
+    expired: "status.expired",
   };
   return map[status] ?? status;
 }
 
-function StatusBadge({ status, expiryDate }: { status: string; expiryDate?: string | null }) {
+function StatusBadge({ status, expiryDate, t }: { status: string; expiryDate?: string | null; t: (key: string) => string }) {
   const isExpired = status === "normal" && expiryDate && new Date(expiryDate) < new Date();
   const displayStatus = isExpired ? "expired" : status;
 
@@ -76,10 +77,11 @@ function StatusBadge({ status, expiryDate }: { status: string; expiryDate?: stri
       : displayStatus === "expired"
         ? "secondary"
         : "default";
-  return <Badge variant={variant}>{statusLabel(displayStatus)}</Badge>;
+  return <Badge variant={variant}>{t(statusLabel(displayStatus))}</Badge>;
 }
 
 export default function InventoryPage() {
+  const { t } = useT();
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -194,7 +196,7 @@ export default function InventoryPage() {
         body: JSON.stringify({ storeId, name: createName.trim(), category: createCategory.trim() || undefined, desc: createDesc.trim() || undefined }),
       });
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || "创建失败");
+      if (!data.success) throw new Error(data.message || t("inventory.create.failed"));
 
       // If qty and spot provided, also create initial stock
       const qty = Number(createQty) || 0;
@@ -223,7 +225,7 @@ export default function InventoryPage() {
       setCreateExpiry(today);
       fetchInventory();
     } catch (err: any) {
-      alert(err.message || "创建物品失败");
+      alert(err.message || t("inventory.create.failed"));
     } finally {
       setCreateSaving(false);
     }
@@ -259,7 +261,7 @@ export default function InventoryPage() {
       setEditingItem(null);
       fetchInventory();
     } catch (err: any) {
-      alert(err.message || "更新物品失败");
+      alert(err.message || t("inventory.update.failed"));
     } finally {
       setEditSaving(false);
     }
@@ -295,7 +297,7 @@ export default function InventoryPage() {
       setEditingStock(null);
       fetchInventory();
     } catch (err: any) {
-      alert(err.message || "更新库存失败");
+      alert(err.message || t("inventory.updateStock.failed"));
     } finally {
       setEditStockSaving(false);
     }
@@ -319,12 +321,12 @@ export default function InventoryPage() {
         `/api/inventory?storeId=${encodeURIComponent(storeId)}&id=${encodeURIComponent(deletingTarget.id)}&type=${deletingTarget.type}`
       );
       const data = await res.json();
-      if (!data.success) throw new Error(data.message || "删除失败");
+      if (!data.success) throw new Error(data.message || t("inventory.delete.failed"));
       setDeleteOpen(false);
       setDeletingTarget(null);
       fetchInventory();
     } catch (err: any) {
-      alert(err.message || "删除失败");
+      alert(err.message || t("inventory.delete.failed"));
     } finally {
       setDeleteSaving(false);
     }
@@ -338,26 +340,26 @@ export default function InventoryPage() {
           <CardContent className="pt-6 space-y-4">
             <div className="text-center space-y-2">
               <Package className="mx-auto h-10 w-10 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">选择仓库</h2>
+              <h2 className="text-lg font-semibold">{t("select.warehouse")}</h2>
               <p className="text-sm text-muted-foreground">
-                选择一个仓库查看库存
+                {t("inventory.select.desc")}
               </p>
             </div>
             {loadingStores ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-sm text-muted-foreground">
-                  加载仓库中...
+                  {t("loading.stores")}
                 </span>
               </div>
             ) : stores.length === 0 ? (
               <div className="text-center text-muted-foreground text-sm py-2">
-                暂无仓库，请在设置中创建
+                {t("no.warehouse")}
               </div>
             ) : (
               <Select onValueChange={handleStoreSelect}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择仓库..." />
+                  <SelectValue placeholder={t("select.warehouse") + "..."} />
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (
@@ -401,7 +403,7 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">库存</h1>
+          <h1 className="text-xl font-semibold">{t("inventory.title")}</h1>
           {currentStore && (
             <p className="text-sm text-muted-foreground">
               {currentStore.name}
@@ -439,7 +441,7 @@ export default function InventoryPage() {
             }}
           >
             <Plus className="h-4 w-4 mr-1.5" />
-            新增物品
+            {t("inventory.addItem")}
           </Button>
           <Dialog open={checkOpen} onOpenChange={(open) => {
             if (open) { setDialogKeyword(filterKeyword); setDialogStatus(filterStatus); setDialogDays(filterDays); }
@@ -450,38 +452,38 @@ export default function InventoryPage() {
               hasActiveFilter ? "border-primary text-primary bg-primary/10 hover:bg-primary/20" : "border-input bg-background"
             )}>
               <Search className="h-4 w-4 mr-1.5" />
-              {hasActiveFilter ? `筛选(${filteredInventory.length}/${inventory.length})` : "筛选"}
+              {hasActiveFilter ? `${t("inventory.filter.applied")}(${filteredInventory.length}/${inventory.length})` : t("filter")}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>筛选库存</DialogTitle>
-                <DialogDescription>按条件过滤库存列表。</DialogDescription>
+                <DialogTitle>{t("inventory.filter.title")}</DialogTitle>
+                <DialogDescription>{t("inventory.filter.desc")}</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="filter-keyword">物品名称</Label>
+                  <Label htmlFor="filter-keyword">{t("inventory.filter.keyword")}</Label>
                   <Input id="filter-keyword" placeholder="关键字..." value={dialogKeyword} onChange={(e) => setDialogKeyword(e.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="filter-status">状态</Label>
+                  <Label htmlFor="filter-status">{t("inventory.filter.status")}</Label>
                   <Select value={dialogStatus} onValueChange={(v) => setDialogStatus(v as string)}>
                     <SelectTrigger id="filter-status">
                       <SelectValue>
-                        {{ normal: "正常", damaged: "损坏", expired: "过期" }[dialogStatus as string] || "全部"}
+                        {{ normal: t("status.normal"), damaged: t("status.damaged"), expired: t("status.expired") }[dialogStatus as string] || t("status.all")}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">全部</SelectItem>
-                      <SelectItem value="normal">正常</SelectItem>
-                      <SelectItem value="damaged">损坏</SelectItem>
-                      <SelectItem value="expired">过期</SelectItem>
+                      <SelectItem value="">{t("status.all")}</SelectItem>
+                      <SelectItem value="normal">{t("status.normal")}</SelectItem>
+                      <SelectItem value="damaged">{t("status.damaged")}</SelectItem>
+                      <SelectItem value="expired">{t("status.expired")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="filter-days">未更新天数</Label>
-                  <Input id="filter-days" type="number" placeholder="不填则不过滤" value={dialogDays} onChange={(e) => setDialogDays(e.target.value)} />
-                  <p className="text-xs text-muted-foreground">只显示超过该天数未更新的物品。</p>
+                  <Label htmlFor="filter-days">{t("inventory.filter.days")}</Label>
+                  <Input id="filter-days" type="number" placeholder={t("inventory.filter.days.placeholder")} value={dialogDays} onChange={(e) => setDialogDays(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">{t("inventory.filter.days.desc")}</p>
                 </div>
               </div>
               <DialogFooter>
@@ -490,13 +492,13 @@ export default function InventoryPage() {
                   setDialogKeyword(""); setDialogStatus(""); setDialogDays("");
                   setCheckOpen(false);
                 }}>
-                  清除筛选
+                  {t("clear")}
                 </Button>
                 <Button onClick={() => {
                   setFilterKeyword(dialogKeyword); setFilterStatus(dialogStatus); setFilterDays(dialogDays);
                   setCheckOpen(false);
                 }}>
-                  应用
+                  {t("apply")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -508,12 +510,12 @@ export default function InventoryPage() {
       <Card className="bg-background/60 backdrop-blur-md border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            库存列表
+            {t("inventory.list")}
             {inventory.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 {filterKeyword || filterStatus
-                  ? `(筛选 ${filteredInventory.length}/${inventory.length} 项)`
-                  : `(共 ${inventory.length} 项)`}
+                  ? `(${t("inventory.filter.applied")} ${filteredInventory.length}/${inventory.length})`
+                  : `(${inventory.length})`}
               </span>
             )}
           </CardTitle>
@@ -522,31 +524,31 @@ export default function InventoryPage() {
           {loadingInventory ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">加载库存中...</span>
+              <span className="ml-2 text-muted-foreground">{t("loading.inventory")}</span>
             </div>
           ) : inventoryError ? (
             <div className="flex items-center justify-center py-12 text-destructive gap-1.5">
               <AlertTriangle className="h-5 w-5" />
-              <span>加载库存失败：{inventoryError}</span>
+              <span>{t("inventory.error")}: {inventoryError}</span>
             </div>
           ) : inventory.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Package className="h-8 w-8 mb-2" />
-              <p className="text-sm">暂无库存物品</p>
+              <p className="text-sm">{t("inventory.noItems")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>物品</TableHead>
-                    <TableHead>分类</TableHead>
-                    <TableHead>位置</TableHead>
-                    <TableHead className="text-right">数量</TableHead>
-                    <TableHead>状态</TableHead>
-                    <TableHead>保质期</TableHead>
-                    <TableHead>最后更新</TableHead>
-                    <TableHead className="text-right">操作</TableHead>
+                    <TableHead>{t("name")}</TableHead>
+                    <TableHead>{t("category")}</TableHead>
+                    <TableHead>{t("location")}</TableHead>
+                    <TableHead className="text-right">{t("qty")}</TableHead>
+                    <TableHead>{t("status")}</TableHead>
+                    <TableHead>{t("expiry")}</TableHead>
+                    <TableHead>{t("updated")}</TableHead>
+                    <TableHead className="text-right">{t("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -561,7 +563,7 @@ export default function InventoryPage() {
                       <TableCell>{item.spot.name}</TableCell>
                       <TableCell className="text-right">{item.qty}</TableCell>
                       <TableCell>
-                        <StatusBadge status={item.status} expiryDate={item.expiryDate} />
+                        <StatusBadge status={item.status} expiryDate={item.expiryDate} t={t} />
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {item.expiryDate
@@ -612,46 +614,46 @@ export default function InventoryPage() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>新增物品</DialogTitle>
-            <DialogDescription>添加一个新物品到仓库。</DialogDescription>
+            <DialogTitle>{t("inventory.addItem")}</DialogTitle>
+            <DialogDescription>{t("inventory.addItem.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="create-name">物品名称 *</Label>
-              <Input id="create-name" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="例如：螺丝刀" />
+              <Label htmlFor="create-name">{t("inventory.create.name")} *</Label>
+              <Input id="create-name" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder={t("inventory.create.name.placeholder")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="create-category">分类</Label>
-                <Input id="create-category" value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} placeholder="例如：工具" />
+                <Label htmlFor="create-category">{t("inventory.create.category")}</Label>
+                <Input id="create-category" value={createCategory} onChange={(e) => setCreateCategory(e.target.value)} placeholder={t("inventory.create.category.placeholder")} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-qty">初始数量</Label>
+                <Label htmlFor="create-qty">{t("inventory.create.qty")}</Label>
                 <Input id="create-qty" type="number" min={0} value={createQty} onChange={(e) => setCreateQty(e.target.value)} placeholder="0" />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-spot">存放位置</Label>
-              <Input id="create-spot" value={createSpot} onChange={(e) => setCreateSpot(e.target.value)} placeholder="例如：储物间" />
+              <Label htmlFor="create-spot">{t("inventory.create.spot")}</Label>
+              <Input id="create-spot" value={createSpot} onChange={(e) => setCreateSpot(e.target.value)} placeholder={t("inventory.create.spot.placeholder")} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="create-status">状态</Label>
+                <Label htmlFor="create-status">{t("inventory.create.status")}</Label>
                 <Select value={createStatus} onValueChange={(v) => setCreateStatus(v as string)}>
                   <SelectTrigger id="create-status">
                     <SelectValue>
-                      {{ normal: "正常", damaged: "损坏", expired: "过期" }[createStatus] || createStatus}
+                      {{ normal: t("status.normal"), damaged: t("status.damaged"), expired: t("status.expired") }[createStatus] || createStatus}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="normal">正常</SelectItem>
-                    <SelectItem value="damaged">损坏</SelectItem>
-                    <SelectItem value="expired">过期</SelectItem>
+                    <SelectItem value="normal">{t("status.normal")}</SelectItem>
+                    <SelectItem value="damaged">{t("status.damaged")}</SelectItem>
+                    <SelectItem value="expired">{t("status.expired")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="create-expiry">保质期（可选）</Label>
+                <Label htmlFor="create-expiry">{t("inventory.create.expiry")}</Label>
                 <input
                   key={`create-date-${createOpen}`}
                   type="date"
@@ -662,17 +664,17 @@ export default function InventoryPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="create-desc">描述</Label>
-              <Input id="create-desc" value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder="可选的描述信息" />
+              <Label htmlFor="create-desc">{t("inventory.create.desc")}</Label>
+              <Input id="create-desc" value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder={t("inventory.create.desc.placeholder")} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              取消
+              {t("cancel")}
             </Button>
             <Button onClick={handleCreateItem} disabled={createSaving || !createName.trim()}>
               {createSaving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              创建
+              {t("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -682,12 +684,12 @@ export default function InventoryPage() {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑物品</DialogTitle>
-            <DialogDescription>修改物品基本信息。</DialogDescription>
+            <DialogTitle>{t("inventory.editItem")}</DialogTitle>
+            <DialogDescription>{t("inventory.editItem.desc")}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">物品名称</Label>
+              <Label htmlFor="edit-name">{t("inventory.create.name")}</Label>
               <Input
                 id="edit-name"
                 value={editName}
@@ -695,7 +697,7 @@ export default function InventoryPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-category">分类</Label>
+              <Label htmlFor="edit-category">{t("inventory.create.category")}</Label>
               <Input
                 id="edit-category"
                 value={editCategory}
@@ -703,7 +705,7 @@ export default function InventoryPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-desc">描述</Label>
+              <Label htmlFor="edit-desc">{t("inventory.create.desc")}</Label>
               <Input
                 id="edit-desc"
                 value={editDesc}
@@ -713,11 +715,11 @@ export default function InventoryPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>
-              取消
+              {t("cancel")}
             </Button>
             <Button onClick={handleEditItem} disabled={editSaving}>
               {editSaving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              保存
+              {t("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -727,14 +729,14 @@ export default function InventoryPage() {
       <Dialog open={editStockOpen} onOpenChange={setEditStockOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑库存</DialogTitle>
+            <DialogTitle>{t("inventory.editStock")}</DialogTitle>
             <DialogDescription>
               {editingStock && `${editingStock.item.name} @ ${editingStock.spot.name}`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="stock-qty">数量</Label>
+              <Label htmlFor="stock-qty">{t("qty")}</Label>
               <Input
                 id="stock-qty"
                 type="number"
@@ -744,22 +746,22 @@ export default function InventoryPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="stock-status">状态</Label>
+              <Label htmlFor="stock-status">{t("inventory.create.status")}</Label>
               <Select value={editStockStatus} onValueChange={(v) => setEditStockStatus(v as string)}>
                 <SelectTrigger id="stock-status">
                   <SelectValue>
-                    {{ normal: "正常", damaged: "损坏", expired: "过期" }[editStockStatus] || editStockStatus}
+                    {{ normal: t("status.normal"), damaged: t("status.damaged"), expired: t("status.expired") }[editStockStatus] || editStockStatus}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="normal">正常</SelectItem>
-                  <SelectItem value="damaged">损坏</SelectItem>
-                  <SelectItem value="expired">过期</SelectItem>
+                  <SelectItem value="normal">{t("status.normal")}</SelectItem>
+                  <SelectItem value="damaged">{t("status.damaged")}</SelectItem>
+                  <SelectItem value="expired">{t("status.expired")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="stock-expiry">保质期</Label>
+              <Label htmlFor="stock-expiry">{t("expiry")}</Label>
               <input
                 key={`stock-date-${editStockOpen}`}
                 type="date"
@@ -767,16 +769,16 @@ export default function InventoryPage() {
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 onChange={(e) => setEditStockExpiry(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">默认日期或修改为T日表示无保质期限制</p>
+              <p className="text-xs text-muted-foreground">{t("inventory.stock.expiry.placeholder")}</p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditStockOpen(false)}>
-              取消
+              {t("cancel")}
             </Button>
             <Button onClick={handleEditStock} disabled={editStockSaving}>
               {editStockSaving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              保存
+              {t("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -786,18 +788,18 @@ export default function InventoryPage() {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
+            <DialogTitle>{t("confirm.delete")}</DialogTitle>
             <DialogDescription>
-              确定要删除 {deletingTarget?.type === "item" ? "物品" : "库存"} "{deletingTarget?.name}" 吗？此操作不可撤销。
+              {t("inventory.delete.confirm", { type: t(deletingTarget?.type === "item" ? "inventory.delete.type.item" : "inventory.delete.type.stock"), name: deletingTarget?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              取消
+              {t("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteSaving}>
               {deleteSaving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              删除
+              {t("delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

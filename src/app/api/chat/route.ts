@@ -69,7 +69,7 @@ export async function POST(req: Request) {
     const tools = createToolDefinitions(prisma);
 
     // ── Run agent (4 layers) ──
-    const { stream, intent, toolResults, conflicts } = await runAgent({
+    const { stream, intents, toolResults, conflicts } = await runAgent({
       prisma,
       modelId,
       userMessage: userText,
@@ -80,6 +80,7 @@ export async function POST(req: Request) {
       contextMode: contextMode as "recent" | "summary" | "hybrid",
       summaryCount: summaryCount || 3,
       tools,
+      signal: req.signal,
     });
 
     // ── Debug log ──
@@ -89,13 +90,13 @@ export async function POST(req: Request) {
           data: {
             action: "debug",
             note: JSON.stringify({
-              intent,
+              intents,
               toolResults: toolResults.map((tr) => ({
                 toolName: tr.toolName,
                 args: tr.args,
                 success: tr.success,
               })),
-              conflicts: conflicts.map((c) => ({
+              conflicts: conflicts.map((c: any) => ({
                 itemName: c.itemName,
                 field: c.field,
                 dbValue: c.dbValue,

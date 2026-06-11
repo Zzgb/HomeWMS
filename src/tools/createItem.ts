@@ -25,7 +25,7 @@ export function makeCreateItemTool(prisma: PrismaClient) {
       try {
         return await inventoryService.createItem(prisma, name, desc, category);
       } catch (e: any) {
-        return { success: false, message: `创建物品失败: ${e.message || "未知错误"}` };
+        return { success: false, message: `Create item failed: ${e.message || "Unknown error"}` };
       }
     },
   });

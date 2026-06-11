@@ -74,7 +74,7 @@ export function makeUpdateStockTool(prisma: PrismaClient) {
           expiryDate,
         });
       } catch (e: any) {
-        return { success: false, message: `更新库存失败: ${e.message || "未知错误"}` };
+        return { success: false, message: `Update stock failed: ${e.message || "Unknown error"}` };
       }
     },
   });

@@ -43,7 +43,7 @@ export function makeStockInTool(prisma: PrismaClient) {
       try {
         return await inventoryService.stockIn(prisma, itemName, qty, spot, note, expiryDate, category, status);
       } catch (e: any) {
-        return { success: false, message: `入库失败: ${e.message || "未知错误"}` };
+        return { success: false, message: `Stock-in failed: ${e.message || "Unknown error"}` };
       }
     },
   });

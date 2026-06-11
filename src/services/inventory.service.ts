@@ -182,6 +182,11 @@ export const inventoryService = {
       const newQty = stock.qty - qty;
       if (newQty <= 0) {
         await tx.stock.delete({ where: { id: stock.id } });
+        // Cleanup orphan item: delete item if no stocks remain
+        const remaining = await tx.stock.count({ where: { itemId: stock.itemId } });
+        if (remaining === 0) {
+          await tx.item.delete({ where: { id: stock.itemId } });
+        }
       } else {
         await tx.stock.update({ where: { id: stock.id }, data: { qty: { decrement: qty } } });
       }
@@ -312,6 +317,11 @@ export const inventoryService = {
       const newQty = fromStock.qty - qty;
       if (newQty <= 0) {
         await tx.stock.delete({ where: { id: fromStock.id } });
+        // Cleanup orphan item
+        const remaining = await tx.stock.count({ where: { itemId: fromStock.itemId } });
+        if (remaining === 0) {
+          await tx.item.delete({ where: { id: fromStock.itemId } });
+        }
       } else {
         await tx.stock.update({
           where: { id: fromStock.id },

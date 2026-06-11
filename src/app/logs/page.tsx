@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -52,35 +53,23 @@ interface LogsResponse {
   totalPages: number;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  "": "全部操作",
-  in: "入库",
-  out: "出库",
-  move: "移动",
-  adjust: "调整",
-  check: "盘点",
-  rename: "改名",
-  expire: "过期",
-  debug: "调试",
+const ACTION_KEY_MAP: Record<string, string> = {
+  "": "logs.action.all",
+  in: "logs.action.in",
+  out: "logs.action.out",
+  move: "logs.action.move",
+  adjust: "logs.action.adjust",
+  check: "logs.action.check",
+  rename: "logs.action.rename",
+  expire: "logs.action.expire",
+  debug: "logs.action.debug",
 };
-
-const ACTION_OPTIONS = [
-  { value: "", label: "全部操作" },
-  { value: "in", label: "入库" },
-  { value: "out", label: "出库" },
-  { value: "move", label: "移动" },
-  { value: "adjust", label: "调整" },
-  { value: "check", label: "盘点" },
-  { value: "rename", label: "改名" },
-  { value: "expire", label: "过期" },
-  { value: "debug", label: "调试" },
-];
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString();
 }
 
-function ActionBadge({ action }: { action: string }) {
+function ActionBadge({ action, t }: { action: string; t: (key: string) => string }) {
   const variantMap: Record<
     string,
     "default" | "secondary" | "destructive" | "outline"
@@ -96,12 +85,13 @@ function ActionBadge({ action }: { action: string }) {
   };
   return (
     <Badge variant={variantMap[action] ?? "default"} className="text-xs">
-      {ACTION_LABELS[action] ?? action}
+      {t(ACTION_KEY_MAP[action] ?? action)}
     </Badge>
   );
 }
 
 export default function LogsPage() {
+  const { t } = useT();
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -201,26 +191,26 @@ export default function LogsPage() {
           <CardContent className="pt-6 space-y-4">
             <div className="text-center space-y-2">
               <ScrollText className="mx-auto h-10 w-10 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">选择仓库</h2>
+              <h2 className="text-lg font-semibold">{t("select.warehouse")}</h2>
               <p className="text-sm text-muted-foreground">
-                选择一个仓库查看操作日志
+                {t("logs.select.desc")}
               </p>
             </div>
             {loadingStores ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 <span className="ml-2 text-sm text-muted-foreground">
-                  加载仓库中...
+                  {t("loading.stores")}
                 </span>
               </div>
             ) : stores.length === 0 ? (
               <div className="text-center text-muted-foreground text-sm py-2">
-                暂无仓库，请在设置中创建
+                {t("no.warehouse")}
               </div>
             ) : (
               <Select onValueChange={handleStoreSelect}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="选择仓库..." />
+                  <SelectValue placeholder={t("select.warehouse") + "..."} />
                 </SelectTrigger>
                 <SelectContent>
                   {stores.map((store) => (
@@ -244,7 +234,7 @@ export default function LogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">操作日志</h1>
+          <h1 className="text-xl font-semibold">{t("logs.title")}</h1>
           {currentStore && (
             <p className="text-sm text-muted-foreground">
               {currentStore.name}
@@ -272,20 +262,20 @@ export default function LogsPage() {
         <CardContent className="pt-4 pb-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">操作</Label>
+              <Label className="text-xs">{t("logs.action")}</Label>
               <Select
                 value={actionFilter}
                 onValueChange={(v: string) => setActionFilter(v)}
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs">
                   <SelectValue>
-                    {ACTION_LABELS[actionFilter] || "全部操作"}
+                    {t(ACTION_KEY_MAP[actionFilter] || "logs.action.all")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {ACTION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {Object.entries(ACTION_KEY_MAP).map(([value, key]) => (
+                    <SelectItem key={value} value={value}>
+                      {t(key)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -293,7 +283,7 @@ export default function LogsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">开始日期</Label>
+              <Label className="text-xs">{t("logs.from")}</Label>
               <Input
                 type="date"
                 value={fromDate}
@@ -303,7 +293,7 @@ export default function LogsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">结束日期</Label>
+              <Label className="text-xs">{t("logs.to")}</Label>
               <Input
                 type="date"
                 value={toDate}
@@ -319,7 +309,7 @@ export default function LogsPage() {
               className="h-8"
             >
               <Filter className="h-3.5 w-3.5 mr-1" />
-              筛选
+              {t("logs.filter")}
             </Button>
           </div>
         </CardContent>
@@ -329,10 +319,10 @@ export default function LogsPage() {
       <Card className="bg-background/60 backdrop-blur-md border-border/50">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            操作记录
+            {t("logs.records")}
             {logs.length > 0 && (
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                (第 {page} 页 / 共 {totalPages} 页)
+                ({t("logs.page", { page, total: totalPages })})
               </span>
             )}
           </CardTitle>
@@ -341,30 +331,30 @@ export default function LogsPage() {
           {loadingLogs ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-muted-foreground">加载日志中...</span>
+              <span className="ml-2 text-muted-foreground">{t("loading.logs")}</span>
             </div>
           ) : logsError ? (
             <div className="flex items-center justify-center py-12 text-destructive gap-1.5">
               <AlertTriangle className="h-5 w-5" />
-              <span>加载日志失败：{logsError}</span>
+              <span>{t("logs.error")}: {logsError}</span>
             </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <ScrollText className="h-8 w-8 mb-2" />
-              <p className="text-sm">暂无操作记录</p>
+              <p className="text-sm">{t("logs.noRecords")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>时间</TableHead>
-                    <TableHead>操作</TableHead>
-                    <TableHead>物品</TableHead>
-                    <TableHead className="text-right">数量</TableHead>
-                    <TableHead>来源</TableHead>
-                    <TableHead>目标</TableHead>
-                    <TableHead>备注</TableHead>
+                    <TableHead>{t("logs.time")}</TableHead>
+                    <TableHead>{t("logs.action")}</TableHead>
+                    <TableHead>{t("name")}</TableHead>
+                    <TableHead className="text-right">{t("qty")}</TableHead>
+                    <TableHead>{t("logs.source")}</TableHead>
+                    <TableHead>{t("logs.target")}</TableHead>
+                    <TableHead>{t("logs.note")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -374,7 +364,7 @@ export default function LogsPage() {
                         {formatDate(log.createdAt)}
                       </TableCell>
                       <TableCell>
-                        <ActionBadge action={log.action} />
+                        <ActionBadge action={log.action} t={t} />
                       </TableCell>
                       <TableCell>{log.item?.name ?? "-"}</TableCell>
                       <TableCell className="text-right">
@@ -403,7 +393,7 @@ export default function LogsPage() {
             disabled={page <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            上一页
+            {t("logs.prev")}
           </Button>
           <span className="text-sm text-muted-foreground">
             {page} / {totalPages}
@@ -414,7 +404,7 @@ export default function LogsPage() {
             disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            下一页
+            {t("logs.next")}
           </Button>
         </div>
       )}

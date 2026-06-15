@@ -86,7 +86,7 @@ export async function runAgent(input: ChatInput) {
   console.log(`[Agent:L1] ${intents.length} intent(s): ${intents.map(i => i.type + (i.type === "mutate" ? `:${(i as any).action}` : "")).join(", ")}`);
 
   // ── Layer 2-3: Execute each intent ──
-  let allResults: ToolResult[] = [];
+  const allResults: ToolResult[] = [];
   let mergedResults: ToolResult[] = [];
   let ctx: any;
   let summaries: string[] = [];
@@ -209,7 +209,7 @@ export async function runAgent(input: ChatInput) {
       }
 
       // ── Execute all corrected plans ──
-      let allCorrectedResults: ToolResult[] = [];
+      const allCorrectedResults: ToolResult[] = [];
       for (const plan of correctedPlans) {
         console.log(`[Agent:L5] Corrected plan: ${(plan as any[]).map((s: any) => s.toolName).join(" → ")}`);
         const res = await executePlan(tools, plan as any);

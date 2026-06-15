@@ -172,66 +172,54 @@ Per-warehouse in `warehouses.json`:
 
 ## Deployment
 
-### Vercel
+### Local Deployment (the only currently supported method)
 
-1. Fork and import in Vercel dashboard
-2. Framework Preset: Next.js
-3. Environment: `DEEPSEEK_API_KEY`, `CRON_SECRET`
-4. Deploy → Settings → add PostgreSQL
-5. External cron: `curl -X POST https://your-app.vercel.app/api/cron/run?secret=your-cron-secret` (every minute)
-
-### Docker
-
-```dockerfile
-FROM node:20-alpine AS base
-WORKDIR /app
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npx prisma generate && npx next build
-FROM base AS runner
-ENV NODE_ENV=production
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
+Vercel / Docker deployment is not yet supported (warehouse config persistence is under development).
 
 ```bash
-docker build -t homewms .
-docker run -d -p 3000:3000 \
-  -e DEEPSEEK_API_KEY=sk-your-key \
-  -e CRON_SECRET=your-random-secret \
-  -v $(pwd)/warehouses.json:/app/warehouses.json \
-  homewms
-```
-
-### Self-Hosted (Node.js)
-
-```bash
-git clone https://github.com/Zzgb/HomeWMS.git && cd HomeWMS
-pnpm install
-# Configure .env with LLM API keys
-npx prisma generate && pnpm build
-pnpm start  # Use PM2 or systemd in production
-```
-
-External cron: `curl -X POST https://your-domain.com/api/cron/run?secret=your-cron-secret`
-
-## Quick Start (Dev)
-
-```bash
-git clone https://github.com/Zzgb/HomeWMS.git && cd HomeWMS
+git clone https://github.com/Zzgb/HomeWMS.git
+cd HomeWMS
 pnpm install
 # Create .env with DEEPSEEK_API_KEY + CRON_SECRET
-pnpm dev
+cp .env.example .env
+npx prisma generate
+pnpm dev   # Development mode
+# or
+pnpm build && pnpm start  # Production mode, use PM2 or systemd
 ```
 
-Open `http://localhost:3000` → Settings → add PostgreSQL connection.
+Open `http://localhost:3000` → Settings → add PostgreSQL connection (local or remote, standard PostgreSQL).
+
+External cron (optional): `curl -X POST http://localhost:3000/api/cron/run?secret=your-cron-secret`
+
+### Deployment Support Status
+
+| Method | Status | Notes |
+|--------|--------|-------|
+| Local Node.js | ✅ Supported | `warehouses.json` based connection management |
+| Vercel | 🚧 In progress | Needs `DATABASE_URL` env var bootstrap + `StoreMeta` table persistence |
+| Docker | 🚧 In progress | Env var injection + volume mount for warehouses.json |
+
+---
+
+## Roadmap
+
+### P0 — Deployment & Configuration
+
+- [ ] **Vercel deployment persistence** — `DATABASE_URL` env var auto-bootstrap for default warehouse, `StoreMeta` table for persisting warehouse configs (solves Vercel ephemeral filesystem issue where `warehouses.json` writes are lost)
+- [ ] **Deployment method selector** — Settings page deployment mode (Local / Vercel / Docker), database connection fields adapt accordingly
+- [ ] **Custom prompt verification** — Confirm settings API GET/PUT customPrompt works, customPrompt overrides SYSTEM_PROMPT correctly
+
+### P0 — AI Rules Frontend
+
+- [ ] **Settings page: all AI rules** — L0 regex patterns list + custom prompt editor + L1 classifier prompt display + L5 regex candidate approval entry
+- [ ] **Regex learning approval UI** — Learner.ts writes candidate regex to Log(action=regex_candidate); needs settings/chat UI to display candidates → user approve/reject/modify → approved regex stored in StoreMeta, loaded dynamically by L0
+
+### P1 — Feature Enhancements
+
+- [ ] Scheduled check results output to chat page (scheduler → write to Message table)
+- [ ] Delete chat history (compressed summary delete + full delete)
+- [ ] Summary compression toggle/frequency settings
 
 ## License
 

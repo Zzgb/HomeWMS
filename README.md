@@ -194,69 +194,54 @@ src/
 
 ## 部署
 
-### Vercel
+### 本地部署（当前唯一支持的部署方式）
 
-1. Fork 本项目，在 Vercel 导入
-2. Framework Preset 选 Next.js
-3. 环境变量: `DEEPSEEK_API_KEY`, `CRON_SECRET`
-4. 部署后打开 Settings → 添加 PostgreSQL
-5. 外部 cron: 设置每分钟调用 `https://your-app.vercel.app/api/cron/run?secret=your-cron-secret`
-
-### Docker
-
-```dockerfile
-FROM node:20-alpine AS base
-WORKDIR /app
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile
-FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npx prisma generate && npx next build
-FROM base AS runner
-ENV NODE_ENV=production
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
-
-```bash
-docker build -t homewms .
-docker run -d -p 3000:3000 \
-  -e DEEPSEEK_API_KEY=sk-your-key \
-  -e CRON_SECRET=your-random-secret \
-  -v $(pwd)/warehouses.json:/app/warehouses.json \
-  homewms
-```
-
-### 自部署 (Node.js)
-
-```bash
-git clone https://github.com/Zzgb/HomeWMS.git
-cd HomeWMS
-pnpm install
-cp .env.example .env  # 编辑 API Key
-npx prisma generate
-pnpm build
-pnpm start            # 推荐 pm2 或 systemd 守护
-```
-
-外部 cron: `curl -X POST https://your-domain.com/api/cron/run?secret=your-cron-secret`
-
-## 快速开始 (开发)
+Vercel / Docker 部署暂不支持（仓库配置持久化方案开发中）。
 
 ```bash
 git clone https://github.com/Zzgb/HomeWMS.git
 cd HomeWMS
 pnpm install
 # 创建 .env → 配 DEEPSEEK_API_KEY + CRON_SECRET
-pnpm dev
+cp .env.example .env
+npx prisma generate
+pnpm dev   # 开发模式
+# 或
+pnpm build && pnpm start  # 生产模式，推荐 pm2 或 systemd 守护
 ```
 
-打开 `http://localhost:3000` → 设置页添加 PostgreSQL 数据库。
+打开 `http://localhost:3000` → 设置页添加 PostgreSQL 数据库（本地或远程均可，标准 PostgreSQL 连接）。
+
+外部 cron（可选）: `curl -X POST http://localhost:3000/api/cron/run?secret=your-cron-secret`
+
+### 部署方式支持计划
+
+| 部署方式 | 状态 | 说明 |
+|---------|------|------|
+| 本地 Node.js | ✅ 已支持 | `warehouses.json` 管理连接，完整表单配置 |
+| Vercel | 🚧 开发中 | 需要 `DATABASE_URL` 环境变量引导 + `StoreMeta` 表持久化配置 |
+| Docker | 🚧 开发中 | 环境变量注入 + volume 挂载 warehouses.json |
+
+---
+
+## 开发计划
+
+### P0 — 部署与配置
+
+- [ ] **Vercel 部署持久化** — `DATABASE_URL` 环境变量自动引导默认仓库，`StoreMeta` 表持久化仓库配置，解决 Vercel 文件系统临时性导致 `warehouses.json` 写入丢失
+- [ ] **部署方式选项** — 设置页加部署方式选择（本地 / Vercel / Docker），数据库连接字段按部署方式适配
+- [ ] **自定义提示词可用性验证** — 确认 settings API GET/PUT customPrompt 正常，prompts.ts 中 customPrompt 覆盖 SYSTEM_PROMPT 逻辑正确
+
+### P0 — AI 规则前台
+
+- [ ] **设置页展示全部 AI 规则** — L0 正则规则列表 + 自定义提示词编辑 + L1 分类 prompt 展示 + L5 正则候选审批入口
+- [ ] **正则学习审批前端** — learner.ts 已将候选正则写入 Log(action=regex_candidate)，需要设置页/对话中展示候选正则 → 用户审批「批准/拒绝/修改」→ 批准后正则写入 StoreMeta，L0 动态加载
+
+### P1 — 功能增强
+
+- [ ] 定时盘点结果输出到聊天页（scheduler → 写 Message 表）
+- [ ] 删除聊天记录（压缩摘要删除 + 全量删除）
+- [ ] 摘要压缩开关/频率设置
 
 ## License
 

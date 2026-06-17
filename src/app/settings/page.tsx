@@ -148,20 +148,26 @@ export default function SettingsPage() {
   const [savingModel, setSavingModel] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [deploymentMode, setDeploymentMode] = useState("local");
-  const [llmConfigs, setLlmConfigs] = useState<Array<{ id: string; provider: string; modelId: string; apiKey: string; baseURL: string | null; label: string | null }>>([]);
+
+  // Cloud mode state
+  type CloudConnection = { id: string; label: string; url: string; storeId?: string; createdAt: string };
+  type LlmConfigItem = { id: string; provider: string; modelId: string; apiKey: string; baseURL: string | null; label: string | null };
+  const [cloudConns, setCloudConns] = useState<CloudConnection[]>([]);
+  const [expandedConnId, setExpandedConnId] = useState<string | null>(null);
+  const [activeCloudConnId, setActiveCloudConnId] = useState<string | null>(null);
+  // Per-connection LLM configs: { [connId]: LlmConfigItem[] }
+  const [connLlmConfigs, setConnLlmConfigs] = useState<Record<string, LlmConfigItem[]>>({});
+  // LLM form state (for the currently expanded connection)
   const [llmFormId, setLlmFormId] = useState<string | null>(null);
   const [llmFormProvider, setLlmFormProvider] = useState("deepseek");
-  const [llmFormModelId, setLlmFormModelId] = useState("");
+  const [llmFormModelId, setLlmFormModelId] = useState("deepseek-v4-flash");
   const [llmFormKey, setLlmFormKey] = useState("");
   const [llmFormBaseURL, setLlmFormBaseURL] = useState("");
   const [llmFormLabel, setLlmFormLabel] = useState("");
   const [savingLLM, setSavingLLM] = useState(false);
-  const [activeLlmConfigId, setActiveLlmConfigId] = useState<string | null>(null);
-
-  // Cloud mode: DATABASE_URL
-  const [dbUrl, setDbUrl] = useState("");
+  // New connection form
+  const [newConnUrl, setNewConnUrl] = useState("");
   const [connectingDb, setConnectingDb] = useState(false);
-  const [dbConnected, setDbConnected] = useState(false);
 
   // Warehouses tab state
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
@@ -200,28 +206,42 @@ export default function SettingsPage() {
   // Language tab state
   const [language, setLanguage] = useState("en");
 
-  // Load stores
+  // Load stores — local = API, cloud = localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("activeStoreId");
-
     const savedLang = localStorage.getItem("language");
     if (savedLang) setLanguage(savedLang);
 
-    fetch("/api/stores")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: Store[]) => {
-        setStores(data);
-        // Validate saved storeId exists
-        if (saved && data.some((s: Store) => s.id === saved)) {
-          setStoreId(saved);
-        } else if (saved) {
-          localStorage.removeItem("activeStoreId");
-          setStoreId(null);
+    if (deploymentMode === "local") {
+      const saved = localStorage.getItem("activeStoreId");
+      fetch("/api/stores")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: Store[]) => {
+          setStores(data);
+          if (saved && data.some((s: Store) => s.id === saved)) {
+            setStoreId(saved);
+          } else if (saved) {
+            localStorage.removeItem("activeStoreId");
+            setStoreId(null);
+          }
+          setLoadingStores(false);
+        })
+        .catch(() => setLoadingStores(false));
+    } else {
+      // Cloud mode: load from localStorage
+      try {
+        const raw = localStorage.getItem("cloud_connections");
+        const conns: CloudConnection[] = raw ? JSON.parse(raw) : [];
+        setCloudConns(conns);
+        const active = localStorage.getItem("activeCloudConnId");
+        if (active && conns.some((c) => c.id === active)) {
+          setActiveCloudConnId(active);
+        } else if (conns.length > 0) {
+          setActiveCloudConnId(conns[0].id);
         }
-        setLoadingStores(false);
-      })
-      .catch(() => setLoadingStores(false));
-  }, []);
+      } catch {}
+      setLoadingStores(false);
+    }
+  }, [deploymentMode]);
 
   // Load config when storeId changes
   useEffect(() => {
@@ -268,37 +288,108 @@ export default function SettingsPage() {
       .catch(() => setLoadingConfig(false));
   }, [storeId]);
 
-  // Load LLM configs and settings when deployment mode is cloud
-  useEffect(() => {
-    if (!storeId || deploymentMode === "local" || !dbConnected) return;
-    // Load LLM configs
-    fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`)
-      .then((r) => r.json())
-      .then((data) => { if (Array.isArray(data)) setLlmConfigs(data); })
-      .catch(() => {});
-    // Load settings from StoreMeta
-    fetch(`/api/settings/${encodeURIComponent(storeId)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.memorySize) setMemorySize(data.memorySize);
-        if (data?.summaryEnabled !== undefined) setSummaryEnabled(data.summaryEnabled);
-        if (data?.summaryThreshold !== undefined) setSummaryThreshold(data.summaryThreshold);
-        if (data?.summaryCount !== undefined) setSummaryCount(data.summaryCount);
-        if (data?.contextMode) setContextMode(data.contextMode);
-        if (data?.debugMode !== undefined) setDebugMode(data.debugMode);
-        if (data?.customPrompt) setCustomPrompt(data.customPrompt);
-        // Load active LLM config from StoreMeta
-        const activeId = data?.activeLlmConfigId;
-        if (activeId) setActiveLlmConfigId(activeId);
-      })
-      .catch(() => {});
-  }, [storeId, deploymentMode, dbConnected]);
+  // ── Cloud connection helpers ──
+  function saveCloudConns(conns: CloudConnection[]) {
+    setCloudConns(conns);
+    localStorage.setItem("cloud_connections", JSON.stringify(conns));
+  }
 
+  const loadLlmConfigsForConn = useCallback(async (connId: string, storeId: string) => {
+    try {
+      const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setConnLlmConfigs((prev) => ({ ...prev, [connId]: data }));
+      }
+    } catch {}
+  }, []);
+
+  const handleAddCloudConn = useCallback(async () => {
+    if (!newConnUrl.trim()) return;
+    setConnectingDb(true);
+    try {
+      const res = await fetch("/api/stores/connect-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newConnUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const newConn: CloudConnection = {
+          id: `cloud_${Date.now()}`,
+          label: "新连接",
+          url: newConnUrl,
+          storeId: data.storeId,
+          createdAt: new Date().toISOString(),
+        };
+        const updated = [...cloudConns, newConn];
+        saveCloudConns(updated);
+        setActiveCloudConnId(newConn.id);
+        localStorage.setItem("activeCloudConnId", newConn.id);
+        if (data.storeId) {
+          setStoreId(data.storeId);
+          await loadLlmConfigsForConn(newConn.id, data.storeId);
+        }
+        setNewConnUrl("");
+        setExpandedConnId(newConn.id);
+      } else {
+        alert(data.error || "连接失败");
+      }
+    } catch {
+      alert("连接失败");
+    } finally {
+      setConnectingDb(false);
+    }
+  }, [newConnUrl, cloudConns, loadLlmConfigsForConn]);
+
+  const handleDeleteCloudConn = useCallback((id: string) => {
+    saveCloudConns(cloudConns.filter((c) => c.id !== id));
+    if (expandedConnId === id) setExpandedConnId(null);
+    if (activeCloudConnId === id) {
+      const remaining = cloudConns.filter((c) => c.id !== id);
+      const next = remaining[0];
+      setActiveCloudConnId(next?.id || null);
+      localStorage.setItem("activeCloudConnId", next?.id || "");
+      if (next?.storeId) setStoreId(next.storeId);
+    }
+  }, [cloudConns, expandedConnId, activeCloudConnId]);
+
+  const handleActivateConn = useCallback(async (conn: CloudConnection) => {
+    if (!conn.storeId) {
+      // Re-register
+      setConnectingDb(true);
+      try {
+        const res = await fetch("/api/stores/connect-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: conn.url }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          conn = { ...conn, storeId: data.storeId };
+          setCloudConns((prev) => prev.map((c) => c.id === conn.id ? conn! : c));
+        }
+      } catch {} finally {
+        setConnectingDb(false);
+      }
+    }
+    setActiveCloudConnId(conn.id);
+    localStorage.setItem("activeCloudConnId", conn.id);
+    if (conn.storeId) {
+      setStoreId(conn.storeId);
+      loadLlmConfigsForConn(conn.id, conn.storeId);
+    }
+  }, [loadLlmConfigsForConn]);
+
+  // ── LLM config handlers (per-connection) ──
   const handleSaveLLM = useCallback(async () => {
-    if (!storeId || !llmFormProvider || !llmFormKey.trim()) return;
+    const connId = expandedConnId;
+    const conn = cloudConns.find((c) => c.id === connId);
+    const sid = conn?.storeId;
+    if (!sid || !llmFormProvider || !llmFormKey.trim()) return;
     setSavingLLM(true);
     try {
-      await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`, {
+      await fetch(`/api/llm-config?storeId=${encodeURIComponent(sid)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -310,25 +401,22 @@ export default function SettingsPage() {
           label: llmFormLabel || undefined,
         }),
       });
-      setLlmFormId(null);
-      setLlmFormModelId("");
-      setLlmFormKey("");
-      setLlmFormBaseURL("");
-      setLlmFormLabel("");
-      const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`);
-      const data = await res.json();
-      if (Array.isArray(data)) setLlmConfigs(data);
+      setLlmFormId(null); setLlmFormModelId("deepseek-v4-flash"); setLlmFormKey(""); setLlmFormBaseURL(""); setLlmFormLabel("");
+      await loadLlmConfigsForConn(connId!, sid);
     } catch {} finally {
       setSavingLLM(false);
     }
-  }, [storeId, llmFormId, llmFormProvider, llmFormModelId, llmFormKey, llmFormBaseURL, llmFormLabel]);
+  }, [expandedConnId, cloudConns, llmFormId, llmFormProvider, llmFormModelId, llmFormKey, llmFormBaseURL, llmFormLabel, loadLlmConfigsForConn]);
 
   const handleDeleteLLM = useCallback(async (id: string) => {
-    if (!storeId) return;
-    await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}&id=${id}`, { method: "DELETE" });
-    setLlmConfigs((prev) => prev.filter((c) => c.id !== id));
-    if (activeLlmConfigId === id) setActiveLlmConfigId(null);
-  }, [storeId, activeLlmConfigId]);
+    const conn = cloudConns.find((c) => c.id === expandedConnId);
+    if (!conn?.storeId) return;
+    await fetch(`/api/llm-config?storeId=${encodeURIComponent(conn.storeId)}&id=${id}`, { method: "DELETE" });
+    setConnLlmConfigs((prev) => ({
+      ...prev,
+      [expandedConnId!]: (prev[expandedConnId!] || []).filter((c) => c.id !== id),
+    }));
+  }, [cloudConns, expandedConnId]);
 
   const handleSaveDeployment = useCallback(async () => {
     if (!storeId) return;
@@ -340,60 +428,24 @@ export default function SettingsPage() {
   }, [storeId, deploymentMode]);
 
   const handleSaveActiveConfig = useCallback(async (configId: string) => {
-    if (!storeId) return;
-    setActiveLlmConfigId(configId);
-    // Save active config id to StoreMeta via settings API
-    await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
+    const conn = cloudConns.find((c) => c.id === expandedConnId);
+    if (!conn?.storeId) return;
+    // Save to StoreMeta
+    await fetch(`/api/settings/${encodeURIComponent(conn.storeId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ activeLlmConfigId: configId }),
     });
-    // Also update modelId
-    fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`, { method: "GET" })
-      .then((r) => r.json())
-      .then(async (configs) => {
-        if (!Array.isArray(configs)) return;
-        const active = configs.find((c: any) => c.id === configId);
-        if (active) {
-          await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ modelId: `${active.provider}/${active.modelId}` }),
-          });
-        }
-      });
-  }, [storeId]);
-
-  const handleConnectDb = useCallback(async () => {
-    if (!dbUrl.trim()) return;
-    setConnectingDb(true);
-    try {
-      const res = await fetch("/api/stores/connect-url", {
-        method: "POST",
+    const configs = connLlmConfigs[expandedConnId!] || [];
+    const active = configs.find((c: any) => c.id === configId);
+    if (active) {
+      await fetch(`/api/settings/${encodeURIComponent(conn.storeId)}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: dbUrl }),
+        body: JSON.stringify({ modelId: `${active.provider}/${active.modelId}` }),
       });
-      const data = await res.json();
-      if (data.success) {
-        // Reload store list
-        const storesRes = await fetch("/api/stores");
-        const storesData = await storesRes.json();
-        if (Array.isArray(storesData)) {
-          setStores(storesData);
-          const storeId = data.storeId || "wh_default";
-          setStoreId(storeId);
-          localStorage.setItem("lastStoreId", storeId);
-        }
-        setDbConnected(true);
-      } else {
-        alert(data.error || "连接失败");
-      }
-    } catch {
-      alert("连接失败");
-    } finally {
-      setConnectingDb(false);
     }
-  }, [dbUrl]);
+  }, [cloudConns, expandedConnId, connLlmConfigs]);
 
   const loadTasks = useCallback(() => {
     if (!storeId) return;
@@ -817,112 +869,134 @@ export default function SettingsPage() {
           </Card>
 
           {deploymentMode !== "local" && (
-            // ── Cloud mode ──
             <>
-              <Card className="bg-background/60 backdrop-blur-md border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-base">{t("settings.deploy.dbUrl")}</CardTitle>
-                  <CardDescription>{t("settings.deploy.dbUrl.desc")}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              {/* Cloud connection list */}
+              {cloudConns.map((conn) => {
+                const isExpanded = expandedConnId === conn.id;
+                const isActive = activeCloudConnId === conn.id;
+                const configs = connLlmConfigs[conn.id] || [];
+                const providerModels: Record<string, string[]> = {
+                  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
+                  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1"],
+                  claude: ["claude-sonnet-4-6", "claude-haiku-4-5"],
+                  gemini: ["gemini-2.0-flash", "gemini-2.5-pro"],
+                  openrouter: [],
+                };
+                return (
+                  <Card key={conn.id} className={`bg-background/60 backdrop-blur-md border-border/50 ${isActive ? "ring-1 ring-primary/50" : ""}`}>
+                    <CardContent className="pt-4 pb-3 space-y-2">
+                      <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpandedConnId(isExpanded ? null : conn.id)}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs">{isExpanded ? "▾" : "▸"}</span>
+                          <span className="text-sm font-medium truncate">{conn.label}</span>
+                          {isActive && <Badge className="text-xs bg-primary/20 text-primary border-primary/30">活跃</Badge>}
+                          <code className="text-xs text-muted-foreground truncate hidden sm:inline">{conn.url.slice(0, 50)}...</code>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {!isActive && (
+                            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={(e) => { e.stopPropagation(); handleActivateConn(conn); }}>设为活跃</Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleDeleteCloudConn(conn.id); }}><span className="text-xs">✕</span></Button>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="border-t border-border/50 pt-3 space-y-3">
+                          {/* LLM configs for this connection */}
+                          {configs.length > 0 && (
+                            <div className="space-y-1">
+                              {configs.map((c) => (
+                                <div key={c.id} className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer text-xs ${false ? "bg-primary/10 border border-primary/30" : "bg-muted/30 border border-transparent hover:bg-muted/50"}`} onClick={() => handleSaveActiveConfig(c.id)}>
+                                  <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
+                                  <span className="font-medium">{c.modelId || c.provider}</span>
+                                  {c.label && <span className="text-muted-foreground">{c.label}</span>}
+                                  <code className="text-muted-foreground ml-auto mr-2">{c.apiKey.slice(0, 12)}...</code>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); handleDeleteLLM(c.id); }}><span className="text-xs">✕</span></Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Add/edit LLM */}
+                          <div className="border-t border-border/50 pt-2 space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground">{llmFormId ? "编辑 LLM 配置" : "添加 LLM 配置"}</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <Label className="text-xs">服务商</Label>
+                                <Select value={llmFormProvider} onValueChange={(v) => { setLlmFormProvider(v); setLlmFormModelId(providerModels[v]?.[0] || ""); }}>
+                                  <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                    <SelectItem value="openai">OpenAI</SelectItem>
+                                    <SelectItem value="claude">Claude</SelectItem>
+                                    <SelectItem value="gemini">Gemini</SelectItem>
+                                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">模型</Label>
+                                {providerModels[llmFormProvider]?.length > 0 ? (
+                                  <Select value={llmFormModelId} onValueChange={setLlmFormModelId}>
+                                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {providerModels[llmFormProvider].map((m) => (
+                                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Input className="h-7 text-xs" placeholder="输入模型 ID" value={llmFormModelId} onChange={(e) => setLlmFormModelId(e.target.value)} />
+                                )}
+                              </div>
+                              <div className="col-span-2 space-y-1">
+                                <Label className="text-xs">API Key</Label>
+                                <Input type="password" className="h-7 text-xs font-mono" placeholder="sk-..." value={llmFormKey} onChange={(e) => setLlmFormKey(e.target.value)} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">自定义端点</Label>
+                                <Input className="h-7 text-xs font-mono" placeholder="默认" value={llmFormBaseURL} onChange={(e) => setLlmFormBaseURL(e.target.value)} />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">标签</Label>
+                                <Input className="h-7 text-xs" placeholder="可选" value={llmFormLabel} onChange={(e) => setLlmFormLabel(e.target.value)} />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveLLM} disabled={savingLLM || !llmFormKey.trim()}>
+                                {savingLLM && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                                保存
+                              </Button>
+                              {llmFormId && (
+                                <Button size="sm" variant="ghost" onClick={() => { setLlmFormId(null); setLlmFormModelId("deepseek-v4-flash"); setLlmFormKey(""); }}>取消</Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {/* Add new connection */}
+              <Card className="bg-background/60 backdrop-blur-md border-border/50 border-dashed">
+                <CardContent className="pt-4 pb-3">
                   <div className="flex gap-2">
                     <Input
                       className="flex-1 h-8 text-xs font-mono"
                       placeholder={t("settings.deploy.dbUrl.placeholder")}
-                      value={dbUrl}
-                      onChange={(e) => setDbUrl(e.target.value)}
+                      value={newConnUrl}
+                      onChange={(e) => setNewConnUrl(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleAddCloudConn(); }}
                     />
-                    <Button size="sm" className="h-8" onClick={handleConnectDb} disabled={connectingDb}>
+                    <Button size="sm" className="h-8" onClick={handleAddCloudConn} disabled={connectingDb || !newConnUrl.trim()}>
                       {connectingDb && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                      {dbConnected ? "已连接" : "连接"}
+                      连接
                     </Button>
                   </div>
-                  {dbConnected && (
-                    <p className="text-xs text-green-600 dark:text-green-400">
-                      已连接到 {currentStore?.name}
-                    </p>
-                  )}
                 </CardContent>
               </Card>
-
-              {dbConnected && (
-                <Card className="bg-background/60 backdrop-blur-md border-border/50">
-                  <CardHeader>
-                    <CardTitle className="text-base">{t("settings.deploy.llm")}</CardTitle>
-                    <CardDescription>{t("settings.deploy.llm.desc")}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {llmConfigs.length > 0 && (
-                      <div className="space-y-1.5">
-                        {llmConfigs.map((c) => (
-                          <div
-                            key={c.id}
-                            className={`flex items-center gap-2 rounded px-3 py-2 cursor-pointer transition-colors ${
-                              activeLlmConfigId === c.id
-                                ? "bg-primary/10 border border-primary/30"
-                                : "bg-muted/30 border border-transparent hover:bg-muted/50"
-                            }`}
-                            onClick={() => handleSaveActiveConfig(c.id)}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
-                                <span className="text-xs font-medium truncate">{c.modelId || c.provider}</span>
-                                {c.label && <span className="text-xs text-muted-foreground">{c.label}</span>}
-                                {activeLlmConfigId === c.id && (
-                                  <Badge className="text-xs bg-primary/20 text-primary border-primary/30">当前</Badge>
-                                )}
-                              </div>
-                              <code className="text-xs text-muted-foreground">{c.apiKey.slice(0, 16)}...</code>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteLLM(c.id); }}>
-                              <span className="text-xs">✕</span>
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="border-t border-border/50 pt-3 space-y-2">
-                      <div className="text-xs font-medium text-muted-foreground">添加配置</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs">{t("settings.deploy.llm.provider")}</Label>
-                          <Select value={llmFormProvider} onValueChange={setLlmFormProvider}>
-                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="deepseek">DeepSeek</SelectItem>
-                              <SelectItem value="openai">OpenAI</SelectItem>
-                              <SelectItem value="claude">Claude</SelectItem>
-                              <SelectItem value="gemini">Gemini</SelectItem>
-                              <SelectItem value="openrouter">OpenRouter</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Model ID</Label>
-                          <Input className="h-7 text-xs" placeholder="e.g. deepseek-v4-flash" value={llmFormModelId} onChange={(e) => setLlmFormModelId(e.target.value)} />
-                        </div>
-                        <div className="col-span-2 space-y-1">
-                          <Label className="text-xs">{t("settings.deploy.llm.key")}</Label>
-                          <Input type="password" className="h-7 text-xs font-mono" placeholder={t("settings.deploy.llm.key.placeholder")} value={llmFormKey} onChange={(e) => setLlmFormKey(e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">{t("settings.deploy.llm.baseURL")}</Label>
-                          <Input className="h-7 text-xs font-mono" placeholder="默认" value={llmFormBaseURL} onChange={(e) => setLlmFormBaseURL(e.target.value)} />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">标签</Label>
-                          <Input className="h-7 text-xs" placeholder="可选名称" value={llmFormLabel} onChange={(e) => setLlmFormLabel(e.target.value)} />
-                        </div>
-                      </div>
-                      <Button size="sm" onClick={handleSaveLLM} disabled={savingLLM || !llmFormKey.trim()}>
-                        {savingLLM && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                        {t("settings.deploy.llm.save")}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
         </TabsContent>

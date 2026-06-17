@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     const summaryCount = cfg?.summaryCount;
     const contextMode = cfg?.contextMode || "recent";
     const debugMode = cfg?.debugMode ?? false;
+    const customPrompt = cfg?.customPrompt;
 
     // ── AI name ──
     let aiName = "小鞠";
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
       memorySize,
       contextMode: contextMode as "recent" | "summary" | "hybrid",
       summaryCount: summaryCount || 3,
+      customPrompt: customPrompt || undefined,
       tools,
       signal: req.signal,
     });

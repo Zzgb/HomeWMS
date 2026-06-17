@@ -19,6 +19,7 @@ export interface ChatInput {
   memorySize: number;
   contextMode: "recent" | "summary" | "hybrid";
   summaryCount: number;
+  customPrompt?: string;
   tools: Record<string, any>;
   onUsage?: (tokens: number) => void;
   signal?: AbortSignal;
@@ -31,7 +32,7 @@ async function runSinglePass(
 ) {
   const {
     prisma, modelId, language, warehouseName,
-    aiName, memorySize, contextMode, summaryCount, tools,
+    aiName, memorySize, contextMode, summaryCount, customPrompt, tools,
   } = input;
 
   // ── Layer 2: Execute tools ──
@@ -64,7 +65,7 @@ async function runSinglePass(
     toolResults: mergedResults,
     dbMessages: [],
     summaries,
-    systemPrompt: "",
+    systemPrompt: customPrompt || "",
     aiName,
     language,
     warehouseName,

@@ -13,8 +13,8 @@ export async function assembleContext(
 ): Promise<ContextOutput> {
   const { toolResults, aiName, language, warehouseName, memorySize, contextMode } = input;
 
-  // Build system prompt
-  let system = SYSTEM_PROMPT;
+  // Build system prompt — prefer custom, fall back to default
+  let system = input.systemPrompt || SYSTEM_PROMPT;
   const today = new Date().toISOString().slice(0, 10);
 
   if (aiName) {

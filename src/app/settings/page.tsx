@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { DEFAULT_MEMORY_SIZE } from "@/lib/constants";
+import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -277,12 +278,24 @@ export default function SettingsPage() {
   const handleSaveModel = useCallback(async () => {
     const modelToSave = selectedModel === "__custom__" ? customModelInput : selectedModel;
     if (!storeId || !modelToSave) return;
+
+    // Compare with default: if same, save null to use system default
+    const trimmed = (customPrompt || "").trim();
+    let promptToSave: string | null = trimmed || null;
+    if (trimmed === SYSTEM_PROMPT.trim()) {
+      promptToSave = null;
+    }
+    // If empty, reset the textarea
+    if (!trimmed) {
+      setCustomPrompt(SYSTEM_PROMPT);
+    }
+
     setSavingModel(true);
     try {
       await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: modelToSave, customPrompt: customPrompt || null }),
+        body: JSON.stringify({ modelId: modelToSave, customPrompt: promptToSave }),
       });
     } catch {
       // Ignore

@@ -41,6 +41,7 @@ import {
   Trash2,
   Edit,
   Check,
+  AlertCircle,
   AlertTriangle,
   Wrench,
   Settings,
@@ -744,7 +745,23 @@ export default function SettingsPage() {
         )}
       </div>
 
-      <Tabs defaultValue="deploy" className="space-y-4">
+      {!loadingStores && !storeId && (
+        <Card className="bg-background/60 backdrop-blur-md border-border/50 border-destructive/30">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+            <AlertCircle className="h-8 w-8 text-destructive/60" />
+            <p className="text-sm font-medium text-destructive/80">
+              {stores.length === 0 ? "未找到仓库，请在仓库管理中添加" : "请先选择一个仓库"}
+            </p>
+            {stores.length === 0 && (
+              <p className="text-xs text-center max-w-md">
+                本地模式：在仓库管理 tab 中添加本地或远程 PostgreSQL +  「本地」部署模式下需在仓库 tab 添加连接
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs defaultValue="model" className="space-y-4">
         <TabsList>
           <TabsTrigger value="deploy" className="gap-1.5">
             <Settings className="h-4 w-4" />

@@ -57,10 +57,20 @@ export interface WarehouseListItem {
 const clientCache = new Map<string, PrismaClient>();
 const schemaFixed = new Set<string>();
 
-function buildUrl(cfg: WarehouseConfig): string {
+function buildUrl(cfg: WarehouseConfig, extraParams?: string): string {
   const encodedPassword = encodeURIComponent(cfg.password);
   const db = cfg.database || cfg.user;
-  return `postgresql://${cfg.user}:${encodedPassword}@${cfg.host}:${cfg.port}/${db}`;
+  let url = `postgresql://${cfg.user}:${encodedPassword}@${cfg.host}:${cfg.port}/${db}`;
+  const params = extraParams || "";
+  if (params) url += (params.startsWith("?") ? "" : "?") + params;
+  return url;
+}
+
+/** Build connection URL with SSL required (for cloud providers like Neon) */
+function buildSecureUrl(cfg: WarehouseConfig, extraParams?: string): string {
+  const params = extraParams || "";
+  const ssl = params.includes("sslmode=") ? "" : (params ? "&" : "") + "sslmode=require";
+  return buildUrl(cfg, params + ssl);
 }
 
 // ── JSON file read/write ──
@@ -397,17 +407,36 @@ export async function registerFromUrl(urlString: string): Promise<{ success: boo
     const user = parsed.username || "";
     const password = parsed.password || "";
     const database = parsed.pathname.slice(1) || "postgres";
+    const queryParams = parsed.search; // preserve e.g. ?sslmode=require&channel_binding=require
 
-    const test = await testConnection(host, port, user, password, database);
-    if (!test.success) {
-      return { success: false, error: test.error || "Connection failed" };
+    // Test connection with SSL
+    const pool = new Pool({
+      host,
+      port,
+      user,
+      password,
+      database,
+      connectionTimeoutMillis: 5000,
+      ssl: { rejectUnauthorized: false },
+    });
+    try {
+      const client = await pool.connect();
+      client.release();
+    } catch (err: any) {
+      return { success: false, error: err.message || String(err) };
+    } finally {
+      await pool.end();
     }
 
     const id = `wh_default`;
     const name = "默认仓库";
 
-    const url = buildUrl({ host, port, user, password, database } as any);
-    const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+    const url = buildSecureUrl(
+      { host, port, user, password, database } as any,
+      queryParams
+    );
+    const sslPool = new Pool({ connectionString: url, max: 1 });
+    const client = new PrismaClient({ adapter: new PrismaPg(sslPool) });
     try {
       await initSchema(client);
     } finally {

@@ -21,15 +21,37 @@ function scheduleTask(id: string, cronExpr: string, warehouseId: string, type: s
 
       if (type === "check_stock") {
         const { inventoryService } = await import("@/services/inventory.service");
+        const { messageService } = await import("@/services/message.service");
         const result = await inventoryService.checkStock(prisma, 30);
         console.log(`Scheduled stock check for warehouse ${warehouseId}:`, {
           unusedCount: result.unusedItems.length,
           damagedCount: result.damagedItems.length,
         });
+        // Write result to chat
+        const parts: string[] = [];
+        if (result.damagedItems.length > 0) {
+          const names = result.damagedItems.map((i) => i.itemName).join("、");
+          parts.push(`损坏/过期物品 (${result.damagedItems.length}): ${names}`);
+        }
+        if (result.unusedItems.length > 0) {
+          const names = result.unusedItems.slice(0, 10).map((i) => i.itemName).join("、");
+          const more = result.unusedItems.length > 10 ? ` 等${result.unusedItems.length}项` : "";
+          parts.push(`长期未使用 (${result.unusedItems.length}): ${names}${more}`);
+        }
+        const msg = parts.length > 0
+          ? `[定时盘点] ${parts.join("; ")}`
+          : `[定时盘点] 库存状态正常，无异常物品。`;
+        await messageService.saveMessage(prisma, "assistant", msg);
       } else if (type === "expiry_check") {
         const { inventoryService } = await import("@/services/inventory.service");
+        const { messageService } = await import("@/services/message.service");
         const result = await inventoryService.updateExpiryStatus(prisma);
         console.log(`Expiry check for warehouse ${warehouseId}: ${result.updated} stocks marked expired`);
+        // Write result to chat
+        const msg = result.updated > 0
+          ? `[保质期检查] 发现 ${result.updated} 个库存已过期，已自动标记为过期状态。`
+          : `[保质期检查] 未发现过期物品。`;
+        await messageService.saveMessage(prisma, "assistant", msg);
       }
     } catch (error) {
       console.error(`Task ${id} failed:`, error);

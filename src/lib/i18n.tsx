@@ -193,6 +193,14 @@ const dict: Record<Lang, Record<string, string>> = {
     "settings.memory.debug": "调试模式",
     "settings.memory.debug.desc": "开启后每次对话的完整上下文会写入操作日志",
     "settings.memory.alert": "当前上下文模式需要启用摘要压缩，请先开启摘要压缩后再保存。",
+    "settings.memory.chatHistory": "聊天记录",
+    "settings.memory.chatHistory.desc": "删除所有聊天记录。压缩删除会先生成摘要再清空，直接清空则不可恢复。",
+    "settings.memory.chatHistory.compressDelete": "压缩后删除",
+    "settings.memory.chatHistory.fullDelete": "直接清空",
+    "settings.memory.chatHistory.confirmCompress": "会先生成摘要再清空 Message 表，摘要保留在上下文中。确定？",
+    "settings.memory.chatHistory.confirmFull": "直接清空所有聊天记录，不可恢复。确定？",
+    "settings.memory.chatHistory.deleted": "聊天记录已清空",
+    "settings.memory.chatHistory.error": "删除失败，请重试",
 
     // Settings — Tasks
     "settings.tasks.count": "{n} 个定时任务",
@@ -414,6 +422,14 @@ const dict: Record<Lang, Record<string, string>> = {
     "settings.memory.debug": "Debug Mode",
     "settings.memory.debug.desc": "When enabled, the full context of each conversation is written to the activity log",
     "settings.memory.alert": "This context mode requires summary compression. Please enable summaries before saving.",
+    "settings.memory.chatHistory": "Chat History",
+    "settings.memory.chatHistory.desc": "Delete all chat messages. Compress & delete generates a summary first; full delete is irreversible.",
+    "settings.memory.chatHistory.compressDelete": "Compress & Delete",
+    "settings.memory.chatHistory.fullDelete": "Delete All",
+    "settings.memory.chatHistory.confirmCompress": "Will generate a summary before clearing the Message table. The summary stays in context. Continue?",
+    "settings.memory.chatHistory.confirmFull": "This will permanently delete all chat messages. Continue?",
+    "settings.memory.chatHistory.deleted": "Chat history cleared",
+    "settings.memory.chatHistory.error": "Delete failed, please retry",
 
     // Settings — Tasks
     "settings.tasks.count": "{n} task(s)",

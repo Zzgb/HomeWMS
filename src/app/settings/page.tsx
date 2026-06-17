@@ -1133,6 +1133,51 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
+                  {/* Chat history deletion */}
+                  <div className="border-t border-border/50 pt-4">
+                    <div className="space-y-1.5">
+                      <Label>{t("settings.memory.chatHistory")}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {t("settings.memory.chatHistory.desc")}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm(t("settings.memory.chatHistory.confirmCompress"))) return;
+                          try {
+                            const res = await fetch(`/api/messages?storeId=${encodeURIComponent(storeId)}&mode=compress`, { method: "DELETE" });
+                            if (!res.ok) throw new Error("Failed");
+                            alert(t("settings.memory.chatHistory.deleted"));
+                          } catch {
+                            alert(t("settings.memory.chatHistory.error"));
+                          }
+                        }}
+                      >
+                        {t("settings.memory.chatHistory.compressDelete")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                        onClick={async () => {
+                          if (!confirm(t("settings.memory.chatHistory.confirmFull"))) return;
+                          try {
+                            const res = await fetch(`/api/messages?storeId=${encodeURIComponent(storeId)}&mode=full`, { method: "DELETE" });
+                            if (!res.ok) throw new Error("Failed");
+                            alert(t("settings.memory.chatHistory.deleted"));
+                          } catch {
+                            alert(t("settings.memory.chatHistory.error"));
+                          }
+                        }}
+                      >
+                        {t("settings.memory.chatHistory.fullDelete")}
+                      </Button>
+                    </div>
+                  </div>
+
                   <Button onClick={handleSaveMemory} disabled={savingMemory}>
                     {savingMemory && (
                       <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />

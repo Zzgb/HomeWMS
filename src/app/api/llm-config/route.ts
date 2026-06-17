@@ -35,12 +35,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { provider, apiKey, baseURL } = body;
+    const { id, provider, modelId, apiKey, baseURL, label } = body;
     if (!provider || !apiKey) {
       return NextResponse.json({ error: "provider and apiKey are required" }, { status: 400 });
     }
 
-    await saveLLMConfig(prisma, provider, apiKey, baseURL || undefined);
+    await saveLLMConfig(prisma, id || null, provider, modelId || "", apiKey, baseURL || undefined, label || undefined);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("PUT /api/llm-config error:", error);
@@ -51,9 +51,9 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const storeId = request.nextUrl.searchParams.get("storeId");
-    const provider = request.nextUrl.searchParams.get("provider");
-    if (!storeId || !provider) {
-      return NextResponse.json({ error: "storeId and provider are required" }, { status: 400 });
+    const id = request.nextUrl.searchParams.get("id");
+    if (!storeId || !id) {
+      return NextResponse.json({ error: "storeId and id are required" }, { status: 400 });
     }
 
     const prisma = getPrisma(storeId);
@@ -61,7 +61,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Warehouse not connected" }, { status: 404 });
     }
 
-    await deleteLLMConfig(prisma, provider);
+    await deleteLLMConfig(prisma, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("DELETE /api/llm-config error:", error);

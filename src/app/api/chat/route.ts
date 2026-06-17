@@ -35,20 +35,26 @@ export async function POST(req: Request) {
     const deploymentMode = cfg?.deploymentMode || "local";
 
     // ── LLM keys: cloud deployments load from DB ──
+    let activeModelId = modelId;
     if (deploymentMode !== "local") {
       const { setLLMKeyOverrides } = await import("@/agent/router");
-      const { loadLLMConfigs } = await import("@/lib/connections");
+      const { loadLLMConfigs, loadStoreMeta } = await import("@/lib/connections");
       try {
         const configs = await loadLLMConfigs(prisma);
         if (configs.length > 0) {
           const map: Record<string, { apiKey: string; baseURL?: string }> = {};
           for (const c of configs) map[c.provider] = { apiKey: c.apiKey, baseURL: c.baseURL || undefined };
           setLLMKeyOverrides(map);
+          // Use the active LLM config's modelId
+          const meta = await loadStoreMeta(prisma);
+          const activeId = meta.activeLlmConfigId;
+          if (activeId) {
+            const active = configs.find((c) => c.id === activeId);
+            if (active) activeModelId = `${active.provider}/${active.modelId}`;
+          }
         }
       } catch {}
     }
-
-    // ── AI name ──
     let aiName = "小鞠";
     try {
       const lastWithName = await prisma.message.findFirst({
@@ -87,7 +93,7 @@ export async function POST(req: Request) {
     // ── Run agent (4 layers) ──
     const { stream, intents, toolResults, conflicts } = await runAgent({
       prisma,
-      modelId,
+      modelId: activeModelId,
       userMessage: userText,
       language: language || "zh",
       warehouseName: cfg?.name || storeId,

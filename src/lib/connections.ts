@@ -359,28 +359,81 @@ export async function saveStoreMeta(prisma: PrismaClient, settings: Record<strin
 }
 
 // ── LLMConfig helpers ──
-export async function loadLLMConfigs(prisma: PrismaClient): Promise<Array<{ provider: string; apiKey: string; baseURL: string | null }>> {
+export async function loadLLMConfigs(prisma: PrismaClient): Promise<Array<{ id: string; provider: string; modelId: string; apiKey: string; baseURL: string | null; label: string | null }>> {
   try {
-    return await (prisma as any).lLMConfig.findMany();
+    return await (prisma as any).lLMConfig.findMany({ orderBy: { provider: "asc" } });
   } catch {
     return [];
   }
 }
 
-export async function saveLLMConfig(prisma: PrismaClient, provider: string, apiKey: string, baseURL?: string): Promise<void> {
+export async function saveLLMConfig(prisma: PrismaClient, id: string | null, provider: string, modelId: string, apiKey: string, baseURL?: string, label?: string): Promise<void> {
   try {
-    await (prisma as any).lLMConfig.upsert({
-      where: { provider },
-      update: { apiKey, baseURL: baseURL || null },
-      create: { provider, apiKey, baseURL: baseURL || null },
-    });
+    if (id) {
+      await (prisma as any).lLMConfig.update({
+        where: { id },
+        data: { provider, modelId, apiKey, baseURL: baseURL || null, label: label || null },
+      });
+    } else {
+      await (prisma as any).lLMConfig.create({
+        data: { provider, modelId, apiKey, baseURL: baseURL || null, label: label || null },
+      });
+    }
   } catch {}
 }
 
-export async function deleteLLMConfig(prisma: PrismaClient, provider: string): Promise<void> {
+export async function deleteLLMConfig(prisma: PrismaClient, id: string): Promise<void> {
   try {
-    await (prisma as any).lLMConfig.deleteMany({ where: { provider } });
+    await (prisma as any).lLMConfig.delete({ where: { id } });
   } catch {}
+}
+
+/** Register a warehouse from a DATABASE_URL string (for cloud deployments UI input) */
+export async function registerFromUrl(urlString: string): Promise<{ success: boolean; id?: string; error?: string }> {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname;
+    const port = parseInt(parsed.port || "5432", 10);
+    const user = parsed.username || "";
+    const password = parsed.password || "";
+    const database = parsed.pathname.slice(1) || "postgres";
+
+    const test = await testConnection(host, port, user, password, database);
+    if (!test.success) {
+      return { success: false, error: test.error || "Connection failed" };
+    }
+
+    const id = `wh_default`;
+    const name = "默认仓库";
+
+    const url = buildUrl({ host, port, user, password, database } as any);
+    const client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+    try {
+      await initSchema(client);
+    } finally {
+      clientCache.set(id, client);
+    }
+
+    const warehouses = readWarehouses();
+    const existing = warehouses.get(id);
+    warehouses.set(id, {
+      id,
+      name,
+      host,
+      port,
+      user,
+      password,
+      database,
+      deploymentMode: (existing as any)?.deploymentMode || "vercel",
+      createdAt: (existing as any)?.createdAt || new Date().toISOString(),
+      ...(existing || {}),
+    });
+    writeWarehouses(warehouses);
+
+    return { success: true, id };
+  } catch (e: any) {
+    return { success: false, error: e.message || String(e) };
+  }
 }
 
 export function getWarehouseConfig(id: string): WarehouseConfig | null {
@@ -462,9 +515,11 @@ async function initSchema(client: PrismaClient): Promise<void> {
     );
     CREATE TABLE IF NOT EXISTS "LLMConfig" (
       "id" TEXT PRIMARY KEY,
-      "provider" TEXT NOT NULL UNIQUE,
+      "provider" TEXT NOT NULL,
+      "modelId" TEXT NOT NULL DEFAULT '',
       "apiKey" TEXT NOT NULL,
-      "baseURL" TEXT
+      "baseURL" TEXT,
+      "label" TEXT
     );
   `;
   await client.$executeRawUnsafe(sql);

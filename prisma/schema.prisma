@@ -106,7 +106,9 @@ model StoreMeta {
 
 model LLMConfig {
   id       String  @id @default(cuid())
-  provider String  @unique
+  provider String
+  modelId  String
   apiKey   String
   baseURL  String?
+  label    String?
 }

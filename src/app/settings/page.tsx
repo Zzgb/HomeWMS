@@ -147,11 +147,20 @@ export default function SettingsPage() {
   const [savingModel, setSavingModel] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [deploymentMode, setDeploymentMode] = useState("local");
-  const [llmConfigs, setLlmConfigs] = useState<Array<{ provider: string; apiKey: string; baseURL: string | null }>>([]);
+  const [llmConfigs, setLlmConfigs] = useState<Array<{ id: string; provider: string; modelId: string; apiKey: string; baseURL: string | null; label: string | null }>>([]);
+  const [llmFormId, setLlmFormId] = useState<string | null>(null);
   const [llmFormProvider, setLlmFormProvider] = useState("deepseek");
+  const [llmFormModelId, setLlmFormModelId] = useState("");
   const [llmFormKey, setLlmFormKey] = useState("");
   const [llmFormBaseURL, setLlmFormBaseURL] = useState("");
+  const [llmFormLabel, setLlmFormLabel] = useState("");
   const [savingLLM, setSavingLLM] = useState(false);
+  const [activeLlmConfigId, setActiveLlmConfigId] = useState<string | null>(null);
+
+  // Cloud mode: DATABASE_URL
+  const [dbUrl, setDbUrl] = useState("");
+  const [connectingDb, setConnectingDb] = useState(false);
+  const [dbConnected, setDbConnected] = useState(false);
 
   // Warehouses tab state
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
@@ -258,14 +267,31 @@ export default function SettingsPage() {
       .catch(() => setLoadingConfig(false));
   }, [storeId]);
 
-  // Load LLM configs when deployment mode is cloud
+  // Load LLM configs and settings when deployment mode is cloud
   useEffect(() => {
-    if (!storeId || deploymentMode === "local") return;
+    if (!storeId || deploymentMode === "local" || !dbConnected) return;
+    // Load LLM configs
     fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`)
       .then((r) => r.json())
       .then((data) => { if (Array.isArray(data)) setLlmConfigs(data); })
       .catch(() => {});
-  }, [storeId, deploymentMode]);
+    // Load settings from StoreMeta
+    fetch(`/api/settings/${encodeURIComponent(storeId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.memorySize) setMemorySize(data.memorySize);
+        if (data?.summaryEnabled !== undefined) setSummaryEnabled(data.summaryEnabled);
+        if (data?.summaryThreshold !== undefined) setSummaryThreshold(data.summaryThreshold);
+        if (data?.summaryCount !== undefined) setSummaryCount(data.summaryCount);
+        if (data?.contextMode) setContextMode(data.contextMode);
+        if (data?.debugMode !== undefined) setDebugMode(data.debugMode);
+        if (data?.customPrompt) setCustomPrompt(data.customPrompt);
+        // Load active LLM config from StoreMeta
+        const activeId = data?.activeLlmConfigId;
+        if (activeId) setActiveLlmConfigId(activeId);
+      })
+      .catch(() => {});
+  }, [storeId, deploymentMode, dbConnected]);
 
   const handleSaveLLM = useCallback(async () => {
     if (!storeId || !llmFormProvider || !llmFormKey.trim()) return;
@@ -274,22 +300,34 @@ export default function SettingsPage() {
       await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: llmFormProvider, apiKey: llmFormKey, baseURL: llmFormBaseURL || undefined }),
+        body: JSON.stringify({
+          id: llmFormId,
+          provider: llmFormProvider,
+          modelId: llmFormModelId,
+          apiKey: llmFormKey,
+          baseURL: llmFormBaseURL || undefined,
+          label: llmFormLabel || undefined,
+        }),
       });
-      // Reload
+      setLlmFormId(null);
+      setLlmFormModelId("");
+      setLlmFormKey("");
+      setLlmFormBaseURL("");
+      setLlmFormLabel("");
       const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`);
       const data = await res.json();
       if (Array.isArray(data)) setLlmConfigs(data);
     } catch {} finally {
       setSavingLLM(false);
     }
-  }, [storeId, llmFormProvider, llmFormKey, llmFormBaseURL]);
+  }, [storeId, llmFormId, llmFormProvider, llmFormModelId, llmFormKey, llmFormBaseURL, llmFormLabel]);
 
-  const handleDeleteLLM = useCallback(async (provider: string) => {
+  const handleDeleteLLM = useCallback(async (id: string) => {
     if (!storeId) return;
-    await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}&provider=${provider}`, { method: "DELETE" });
-    setLlmConfigs((prev) => prev.filter((c) => c.provider !== provider));
-  }, [storeId]);
+    await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}&id=${id}`, { method: "DELETE" });
+    setLlmConfigs((prev) => prev.filter((c) => c.id !== id));
+    if (activeLlmConfigId === id) setActiveLlmConfigId(null);
+  }, [storeId, activeLlmConfigId]);
 
   const handleSaveDeployment = useCallback(async () => {
     if (!storeId) return;
@@ -300,8 +338,63 @@ export default function SettingsPage() {
     });
   }, [storeId, deploymentMode]);
 
-  // Load tasks when storeId changes
-  useEffect(() => {
+  const handleSaveActiveConfig = useCallback(async (configId: string) => {
+    if (!storeId) return;
+    setActiveLlmConfigId(configId);
+    // Save active config id to StoreMeta via settings API
+    await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activeLlmConfigId: configId }),
+    });
+    // Also update modelId
+    fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`, { method: "GET" })
+      .then((r) => r.json())
+      .then(async (configs) => {
+        if (!Array.isArray(configs)) return;
+        const active = configs.find((c: any) => c.id === configId);
+        if (active) {
+          await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ modelId: `${active.provider}/${active.modelId}` }),
+          });
+        }
+      });
+  }, [storeId]);
+
+  const handleConnectDb = useCallback(async () => {
+    if (!dbUrl.trim()) return;
+    setConnectingDb(true);
+    try {
+      const res = await fetch("/api/stores/connect-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: dbUrl }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Reload store list
+        const storesRes = await fetch("/api/stores");
+        const storesData = await storesRes.json();
+        if (Array.isArray(storesData)) {
+          setStores(storesData);
+          const storeId = data.storeId || "wh_default";
+          setStoreId(storeId);
+          localStorage.setItem("lastStoreId", storeId);
+        }
+        setDbConnected(true);
+      } else {
+        alert(data.error || "连接失败");
+      }
+    } catch {
+      alert("连接失败");
+    } finally {
+      setConnectingDb(false);
+    }
+  }, [dbUrl]);
+
+  const loadTasks = useCallback(() => {
     if (!storeId) return;
     setLoadingTasks(true);
     fetch(`/api/tasks?storeId=${encodeURIComponent(storeId)}`)
@@ -312,6 +405,9 @@ export default function SettingsPage() {
       })
       .catch(() => setLoadingTasks(false));
   }, [storeId]);
+
+  // Load tasks when storeId changes
+  useEffect(() => { loadTasks(); }, [loadTasks]);
 
   const handleStoreSelect = useCallback((value: string | null) => {
     if (!value) return;
@@ -648,6 +744,29 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Deployment mode selector */}
+      <Card className="bg-background/60 backdrop-blur-md border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("settings.deploy.title")}</CardTitle>
+          <CardDescription>{t("settings.deploy.desc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={deploymentMode} onValueChange={(v) => { setDeploymentMode(v); setTimeout(() => handleSaveDeployment(), 0); }}>
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue>
+                {{ local: t("settings.deploy.mode.local"), vercel: t("settings.deploy.mode.vercel"), docker: t("settings.deploy.mode.docker") }[deploymentMode] || deploymentMode}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="local">{t("settings.deploy.mode.local")}</SelectItem>
+              <SelectItem value="vercel">{t("settings.deploy.mode.vercel")}</SelectItem>
+              <SelectItem value="docker">{t("settings.deploy.mode.docker")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {deploymentMode === "local" ? (
       <Tabs defaultValue="model" className="space-y-4">
         <TabsList>
           <TabsTrigger value="model" className="gap-1.5">
@@ -789,89 +908,6 @@ export default function SettingsPage() {
                     {t("settings.model.save")}
                   </Button>
                 </>
-              )}
-            </CardContent>
-          </Card>
-          {/* Deployment mode + LLM config */}
-          <Card className="bg-background/60 backdrop-blur-md border-border/50">
-            <CardHeader>
-              <CardTitle className="text-base">{t("settings.deploy.title")}</CardTitle>
-              <CardDescription>{t("settings.deploy.desc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>{t("settings.deploy.mode")}</Label>
-                </div>
-                <Select value={deploymentMode} onValueChange={(v) => { setDeploymentMode(v); setTimeout(() => handleSaveDeployment(), 0); }}>
-                  <SelectTrigger className="w-36 h-8 text-xs">
-                    <SelectValue>
-                      {{ local: t("settings.deploy.mode.local"), vercel: t("settings.deploy.mode.vercel"), docker: t("settings.deploy.mode.docker") }[deploymentMode] || deploymentMode}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="local">{t("settings.deploy.mode.local")}</SelectItem>
-                    <SelectItem value="vercel">{t("settings.deploy.mode.vercel")}</SelectItem>
-                    <SelectItem value="docker">{t("settings.deploy.mode.docker")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {deploymentMode !== "local" && (
-                <div className="border-t border-border/50 pt-4 space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">{t("settings.deploy.llm")}</Label>
-                    <p className="text-xs text-muted-foreground">{t("settings.deploy.llm.desc")}</p>
-                  </div>
-
-                  {/* Existing configs */}
-                  {llmConfigs.length > 0 && (
-                    <div className="space-y-2">
-                      {llmConfigs.map((c) => (
-                        <div key={c.provider} className="flex items-center gap-2 bg-muted/30 rounded px-3 py-1.5">
-                          <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
-                          <code className="text-xs text-muted-foreground flex-1 truncate">{c.apiKey.slice(0, 12)}...</code>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteLLM(c.provider)}>
-                            <span className="text-xs">✕</span>
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Add new config */}
-                  <div className="flex items-end gap-2">
-                    <div className="space-y-1 flex-1">
-                      <Label className="text-xs">{t("settings.deploy.llm.provider")}</Label>
-                      <Select value={llmFormProvider} onValueChange={setLlmFormProvider}>
-                        <SelectTrigger className="h-7 text-xs w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="deepseek">DeepSeek</SelectItem>
-                          <SelectItem value="openai">OpenAI</SelectItem>
-                          <SelectItem value="claude">Claude</SelectItem>
-                          <SelectItem value="gemini">Gemini</SelectItem>
-                          <SelectItem value="openrouter">OpenRouter</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1 flex-1">
-                      <Label className="text-xs">{t("settings.deploy.llm.key")}</Label>
-                      <Input
-                        type="password"
-                        className="h-7 text-xs font-mono"
-                        placeholder={t("settings.deploy.llm.key.placeholder")}
-                        value={llmFormKey}
-                        onChange={(e) => setLlmFormKey(e.target.value)}
-                      />
-                    </div>
-                    <Button size="sm" className="h-7" onClick={handleSaveLLM} disabled={savingLLM || !llmFormKey.trim()}>
-                      {savingLLM && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                      {t("settings.deploy.llm.save")}
-                    </Button>
-                  </div>
-                </div>
               )}
             </CardContent>
           </Card>
@@ -1564,6 +1600,271 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      ) : (
+        // ── Cloud mode (Vercel/Docker) ──
+        <div className="space-y-4">
+          {/* DATABASE_URL */}
+          <Card className="bg-background/60 backdrop-blur-md border-border/50">
+            <CardHeader>
+              <CardTitle className="text-base">{t("settings.deploy.dbUrl")}</CardTitle>
+              <CardDescription>{t("settings.deploy.dbUrl.desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  className="flex-1 h-8 text-xs font-mono"
+                  placeholder={t("settings.deploy.dbUrl.placeholder")}
+                  value={dbUrl}
+                  onChange={(e) => setDbUrl(e.target.value)}
+                />
+                <Button size="sm" className="h-8" onClick={handleConnectDb} disabled={connectingDb}>
+                  {connectingDb && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                  {dbConnected ? "已连接" : "连接"}
+                </Button>
+              </div>
+              {dbConnected && (
+                <p className="text-xs text-green-600 dark:text-green-400">
+                  已连接到 {currentStore?.name}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {dbConnected && (
+            <>
+              {/* LLM Config */}
+              <Card className="bg-background/60 backdrop-blur-md border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base">{t("settings.deploy.llm")}</CardTitle>
+                  <CardDescription>{t("settings.deploy.llm.desc")}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {llmConfigs.length > 0 && (
+                    <div className="space-y-1.5">
+                      {llmConfigs.map((c) => (
+                        <div
+                          key={c.id}
+                          className={`flex items-center gap-2 rounded px-3 py-2 cursor-pointer transition-colors ${
+                            activeLlmConfigId === c.id
+                              ? "bg-primary/10 border border-primary/30"
+                              : "bg-muted/30 border border-transparent hover:bg-muted/50"
+                          }`}
+                          onClick={() => handleSaveActiveConfig(c.id)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
+                              <span className="text-xs font-medium truncate">{c.modelId || c.provider}</span>
+                              {c.label && <span className="text-xs text-muted-foreground">{c.label}</span>}
+                              {activeLlmConfigId === c.id && (
+                                <Badge className="text-xs bg-primary/20 text-primary border-primary/30">当前</Badge>
+                              )}
+                            </div>
+                            <code className="text-xs text-muted-foreground">{c.apiKey.slice(0, 16)}...</code>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteLLM(c.id); }}>
+                            <span className="text-xs">✕</span>
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="border-t border-border/50 pt-3 space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">添加配置</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t("settings.deploy.llm.provider")}</Label>
+                        <Select value={llmFormProvider} onValueChange={setLlmFormProvider}>
+                          <SelectTrigger className="h-7 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="deepseek">DeepSeek</SelectItem>
+                            <SelectItem value="openai">OpenAI</SelectItem>
+                            <SelectItem value="claude">Claude</SelectItem>
+                            <SelectItem value="gemini">Gemini</SelectItem>
+                            <SelectItem value="openrouter">OpenRouter</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Model ID</Label>
+                        <Input className="h-7 text-xs" placeholder="e.g. deepseek-v4-flash" value={llmFormModelId} onChange={(e) => setLlmFormModelId(e.target.value)} />
+                      </div>
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-xs">{t("settings.deploy.llm.key")}</Label>
+                        <Input type="password" className="h-7 text-xs font-mono" placeholder={t("settings.deploy.llm.key.placeholder")} value={llmFormKey} onChange={(e) => setLlmFormKey(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t("settings.deploy.llm.baseURL")}</Label>
+                        <Input className="h-7 text-xs font-mono" placeholder="默认" value={llmFormBaseURL} onChange={(e) => setLlmFormBaseURL(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">标签</Label>
+                        <Input className="h-7 text-xs" placeholder="可选名称" value={llmFormLabel} onChange={(e) => setLlmFormLabel(e.target.value)} />
+                      </div>
+                    </div>
+                    <Button size="sm" onClick={handleSaveLLM} disabled={savingLLM || !llmFormKey.trim()}>
+                      {savingLLM && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                      {t("settings.deploy.llm.save")}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Memory */}
+              <Card className="bg-background/60 backdrop-blur-md border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base">{t("settings.memory.title")}</CardTitle>
+                  <CardDescription>{t("settings.memory.desc")}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>{t("settings.memory.contextMode")}</Label>
+                      <p className="text-xs text-muted-foreground">{t("settings.memory.contextMode.desc")}</p>
+                    </div>
+                    <Select value={contextMode} onValueChange={setContextMode}>
+                      <SelectTrigger className="w-44 h-8 text-xs">
+                        <SelectValue>{{ recent: t("settings.memory.mode.recent"), summary: t("settings.memory.mode.summary"), hybrid: t("settings.memory.mode.hybrid") }[contextMode] || contextMode}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="recent">{t("settings.memory.mode.recent")}</SelectItem>
+                        <SelectItem value="summary">{t("settings.memory.mode.summary")}</SelectItem>
+                        <SelectItem value="hybrid">{t("settings.memory.mode.hybrid")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(contextMode === "recent" || contextMode === "hybrid") && (
+                    <div className="space-y-3 border-t border-border/50 pt-4">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("settings.memory.shortTerm")}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm">{t("settings.memory.size")}</Label>
+                        </div>
+                        <Input type="number" value={memorySize} onChange={(e) => { const v = e.target.value; setMemorySize(v === "" ? 0 : Number(v)); }} className="w-20 h-7 text-xs font-mono text-center" />
+                      </div>
+                      <input type="range" min={50} max={2000} step={50} value={memorySize || 50} onChange={(e) => setMemorySize(Number(e.target.value))} className="w-full max-w-md accent-primary h-2 cursor-pointer" />
+                    </div>
+                  )}
+                  {(contextMode === "summary" || contextMode === "hybrid") && (
+                    <div className="space-y-3 border-t border-border/50 pt-4">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("settings.memory.summary")}</div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm">{t("settings.memory.enabled")}</Label>
+                        </div>
+                        <Switch checked={summaryEnabled} onCheckedChange={setSummaryEnabled} />
+                      </div>
+                      {summaryEnabled && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm">{t("settings.memory.threshold")}</Label>
+                            <Input type="number" value={summaryThreshold} onChange={(e) => { const v = e.target.value; setSummaryThreshold(v === "" ? 0 : Number(v)); }} className="w-16 h-7 text-xs font-mono text-center" />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm">{t("settings.memory.summaryCount")}</Label>
+                            <Input type="number" value={summaryCount} onChange={(e) => { const v = e.target.value; setSummaryCount(v === "" ? 0 : Number(v)); }} className="w-16 h-7 text-xs font-mono text-center" />
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div className="border-t border-border/50 pt-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>{t("settings.memory.debug")}</Label>
+                      </div>
+                      <Switch checked={debugMode} onCheckedChange={setDebugMode} />
+                    </div>
+                  </div>
+
+                  {/* Chat history */}
+                  <div className="border-t border-border/50 pt-4">
+                    <div className="space-y-1.5">
+                      <Label>{t("settings.memory.chatHistory")}</Label>
+                      <p className="text-xs text-muted-foreground">{t("settings.memory.chatHistory.desc")}</p>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <Button variant="outline" size="sm" onClick={async () => {
+                        if (!confirm(t("settings.memory.chatHistory.confirmCompress"))) return;
+                        try {
+                          const res = await fetch(`/api/messages?storeId=${encodeURIComponent(storeId)}&mode=compress`, { method: "DELETE" });
+                          if (!res.ok) throw new Error("Failed");
+                          alert(t("settings.memory.chatHistory.deleted"));
+                        } catch { alert(t("settings.memory.chatHistory.error")); }
+                      }}>{t("settings.memory.chatHistory.compressDelete")}</Button>
+                      <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={async () => {
+                        if (!confirm(t("settings.memory.chatHistory.confirmFull"))) return;
+                        try {
+                          const res = await fetch(`/api/messages?storeId=${encodeURIComponent(storeId)}&mode=full`, { method: "DELETE" });
+                          if (!res.ok) throw new Error("Failed");
+                          alert(t("settings.memory.chatHistory.deleted"));
+                        } catch { alert(t("settings.memory.chatHistory.error")); }
+                      }}>{t("settings.memory.chatHistory.fullDelete")}</Button>
+                    </div>
+                  </div>
+
+                  <Button onClick={handleSaveMemory} disabled={savingMemory}>
+                    {savingMemory && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                    <Check className="h-4 w-4 mr-1.5" />
+                    {t("save")}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Tasks + Language */}
+              <Card className="bg-background/60 backdrop-blur-md border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base">{t("settings.tasks.count", { n: tasks.length })}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {tasks.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t("settings.tasks.empty")}</p>
+                  ) : (
+                    tasks.map((task) => (
+                      <div key={task.id} className="flex items-center justify-between bg-muted/30 rounded px-3 py-2">
+                        <div>
+                          <span className="text-sm">{task.type === "check_stock" ? t("settings.tasks.type.checkStock") : t("settings.tasks.type.expiryCheck")}</span>
+                          <code className="text-xs text-muted-foreground ml-2">{task.cron}</code>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch checked={task.enabled} onCheckedChange={async (v) => {
+                            await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: v }) });
+                            loadTasks();
+                          }} />
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEditTask(task)}><span className="text-xs">✎</span></Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeleteTaskId(task.id)}><span className="text-xs">✕</span></Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <Button size="sm" variant="outline" onClick={openCreateTask}><Plus className="h-3 w-3 mr-1" />{t("settings.tasks.add")}</Button>
+                </CardContent>
+              </Card>
+
+              {/* Language */}
+              <Card className="bg-background/60 backdrop-blur-md border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-base">{t("settings.lang.title")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Select value={language || "zh"} onValueChange={handleLanguageChange}>
+                    <SelectTrigger className="w-44 h-8 text-xs">
+                      <SelectValue>{language === "en" ? "English" : "中文"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zh">中文</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

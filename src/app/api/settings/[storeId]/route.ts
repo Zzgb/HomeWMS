@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getWarehouseConfig, updateWarehouse } from "@/lib/connections";
+import { getWarehouseConfig, updateWarehouse, saveStoreMeta } from "@/lib/connections";
+import { getPrisma } from "@/lib/prisma";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 
 export async function GET(
@@ -45,7 +46,7 @@ export async function PUT(
   try {
     const { storeId } = await params;
     const body = await request.json();
-    const { name, modelId, memorySize, customPrompt, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode, deploymentMode } = body;
+    const { name, modelId, memorySize, customPrompt, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode, deploymentMode, activeLlmConfigId } = body;
 
     const result = updateWarehouse(storeId, {
       ...(name !== undefined ? { name } : {}),
@@ -64,6 +65,14 @@ export async function PUT(
         { error: result.error || "更新仓库配置失败" },
         { status: 400 }
       );
+    }
+
+    // Persist active LLM config to StoreMeta
+    if (activeLlmConfigId !== undefined) {
+      const prisma = getPrisma(storeId);
+      if (prisma) {
+        await saveStoreMeta(prisma, { activeLlmConfigId }).catch(() => {});
+      }
     }
 
     return NextResponse.json({ success: true, message: "仓库配置更新成功" });

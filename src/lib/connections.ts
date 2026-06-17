@@ -443,8 +443,8 @@ export async function registerFromUrl(urlString: string): Promise<{ success: boo
       clientCache.set(id, client);
     }
 
+    // Only cache in-memory — cloud connections don't touch warehouses.json
     const warehouses = readWarehouses();
-    const existing = warehouses.get(id);
     warehouses.set(id, {
       id,
       name,
@@ -453,11 +453,9 @@ export async function registerFromUrl(urlString: string): Promise<{ success: boo
       user,
       password,
       database,
-      deploymentMode: (existing as any)?.deploymentMode || "vercel",
-      createdAt: (existing as any)?.createdAt || new Date().toISOString(),
-      ...(existing || {}),
-    });
-    writeWarehouses(warehouses);
+      deploymentMode: "vercel",
+      createdAt: new Date().toISOString(),
+    } as WarehouseConfig);
 
     return { success: true, id };
   } catch (e: any) {

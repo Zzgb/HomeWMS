@@ -27,6 +27,7 @@ export async function GET(
       summaryCount: config.summaryCount || 3,
       contextMode: config.contextMode || "recent",
       debugMode: config.debugMode ?? false,
+      deploymentMode: config.deploymentMode || "local",
     });
   } catch (error) {
     console.error("GET /api/settings/[storeId] error:", error);
@@ -44,7 +45,7 @@ export async function PUT(
   try {
     const { storeId } = await params;
     const body = await request.json();
-    const { name, modelId, memorySize, customPrompt, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode } = body;
+    const { name, modelId, memorySize, customPrompt, summaryEnabled, summaryThreshold, summaryCount, contextMode, debugMode, deploymentMode } = body;
 
     const result = updateWarehouse(storeId, {
       ...(name !== undefined ? { name } : {}),
@@ -56,6 +57,7 @@ export async function PUT(
       ...(summaryCount !== undefined ? { summaryCount: Number(summaryCount) } : {}),
       ...(contextMode !== undefined ? { contextMode } : {}),
       ...(debugMode !== undefined ? { debugMode } : {}),
+      ...(deploymentMode !== undefined ? { deploymentMode } : {}),
     });
     if (!result.success) {
       return NextResponse.json(

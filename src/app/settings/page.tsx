@@ -146,6 +146,12 @@ export default function SettingsPage() {
   const [customModelInput, setCustomModelInput] = useState("");
   const [savingModel, setSavingModel] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
+  const [deploymentMode, setDeploymentMode] = useState("local");
+  const [llmConfigs, setLlmConfigs] = useState<Array<{ provider: string; apiKey: string; baseURL: string | null }>>([]);
+  const [llmFormProvider, setLlmFormProvider] = useState("deepseek");
+  const [llmFormKey, setLlmFormKey] = useState("");
+  const [llmFormBaseURL, setLlmFormBaseURL] = useState("");
+  const [savingLLM, setSavingLLM] = useState(false);
 
   // Warehouses tab state
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false);
@@ -244,10 +250,55 @@ export default function SettingsPage() {
         if (data?.customPrompt !== undefined) {
           setCustomPrompt(data.customPrompt);
         }
+        if (data?.deploymentMode !== undefined) {
+          setDeploymentMode(data.deploymentMode);
+        }
         setLoadingConfig(false);
       })
       .catch(() => setLoadingConfig(false));
   }, [storeId]);
+
+  // Load LLM configs when deployment mode is cloud
+  useEffect(() => {
+    if (!storeId || deploymentMode === "local") return;
+    fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`)
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setLlmConfigs(data); })
+      .catch(() => {});
+  }, [storeId, deploymentMode]);
+
+  const handleSaveLLM = useCallback(async () => {
+    if (!storeId || !llmFormProvider || !llmFormKey.trim()) return;
+    setSavingLLM(true);
+    try {
+      await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: llmFormProvider, apiKey: llmFormKey, baseURL: llmFormBaseURL || undefined }),
+      });
+      // Reload
+      const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}`);
+      const data = await res.json();
+      if (Array.isArray(data)) setLlmConfigs(data);
+    } catch {} finally {
+      setSavingLLM(false);
+    }
+  }, [storeId, llmFormProvider, llmFormKey, llmFormBaseURL]);
+
+  const handleDeleteLLM = useCallback(async (provider: string) => {
+    if (!storeId) return;
+    await fetch(`/api/llm-config?storeId=${encodeURIComponent(storeId)}&provider=${provider}`, { method: "DELETE" });
+    setLlmConfigs((prev) => prev.filter((c) => c.provider !== provider));
+  }, [storeId]);
+
+  const handleSaveDeployment = useCallback(async () => {
+    if (!storeId) return;
+    await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deploymentMode }),
+    });
+  }, [storeId, deploymentMode]);
 
   // Load tasks when storeId changes
   useEffect(() => {
@@ -738,6 +789,89 @@ export default function SettingsPage() {
                     {t("settings.model.save")}
                   </Button>
                 </>
+              )}
+            </CardContent>
+          </Card>
+          {/* Deployment mode + LLM config */}
+          <Card className="bg-background/60 backdrop-blur-md border-border/50">
+            <CardHeader>
+              <CardTitle className="text-base">{t("settings.deploy.title")}</CardTitle>
+              <CardDescription>{t("settings.deploy.desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{t("settings.deploy.mode")}</Label>
+                </div>
+                <Select value={deploymentMode} onValueChange={(v) => { setDeploymentMode(v); setTimeout(() => handleSaveDeployment(), 0); }}>
+                  <SelectTrigger className="w-36 h-8 text-xs">
+                    <SelectValue>
+                      {{ local: t("settings.deploy.mode.local"), vercel: t("settings.deploy.mode.vercel"), docker: t("settings.deploy.mode.docker") }[deploymentMode] || deploymentMode}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">{t("settings.deploy.mode.local")}</SelectItem>
+                    <SelectItem value="vercel">{t("settings.deploy.mode.vercel")}</SelectItem>
+                    <SelectItem value="docker">{t("settings.deploy.mode.docker")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {deploymentMode !== "local" && (
+                <div className="border-t border-border/50 pt-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">{t("settings.deploy.llm")}</Label>
+                    <p className="text-xs text-muted-foreground">{t("settings.deploy.llm.desc")}</p>
+                  </div>
+
+                  {/* Existing configs */}
+                  {llmConfigs.length > 0 && (
+                    <div className="space-y-2">
+                      {llmConfigs.map((c) => (
+                        <div key={c.provider} className="flex items-center gap-2 bg-muted/30 rounded px-3 py-1.5">
+                          <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
+                          <code className="text-xs text-muted-foreground flex-1 truncate">{c.apiKey.slice(0, 12)}...</code>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteLLM(c.provider)}>
+                            <span className="text-xs">✕</span>
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add new config */}
+                  <div className="flex items-end gap-2">
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">{t("settings.deploy.llm.provider")}</Label>
+                      <Select value={llmFormProvider} onValueChange={setLlmFormProvider}>
+                        <SelectTrigger className="h-7 text-xs w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="deepseek">DeepSeek</SelectItem>
+                          <SelectItem value="openai">OpenAI</SelectItem>
+                          <SelectItem value="claude">Claude</SelectItem>
+                          <SelectItem value="gemini">Gemini</SelectItem>
+                          <SelectItem value="openrouter">OpenRouter</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <Label className="text-xs">{t("settings.deploy.llm.key")}</Label>
+                      <Input
+                        type="password"
+                        className="h-7 text-xs font-mono"
+                        placeholder={t("settings.deploy.llm.key.placeholder")}
+                        value={llmFormKey}
+                        onChange={(e) => setLlmFormKey(e.target.value)}
+                      />
+                    </div>
+                    <Button size="sm" className="h-7" onClick={handleSaveLLM} disabled={savingLLM || !llmFormKey.trim()}>
+                      {savingLLM && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                      {t("settings.deploy.llm.save")}
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

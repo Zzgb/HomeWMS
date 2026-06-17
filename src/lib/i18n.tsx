@@ -202,6 +202,25 @@ const dict: Record<Lang, Record<string, string>> = {
     "settings.memory.chatHistory.deleted": "聊天记录已清空",
     "settings.memory.chatHistory.error": "删除失败，请重试",
 
+    // Settings — Deployment
+    "settings.deploy.title": "部署方式",
+    "settings.deploy.desc": "选择运行环境。云端模式下 LLM API Key 存入数据库，无需 .env 文件。",
+    "settings.deploy.mode": "部署模式",
+    "settings.deploy.mode.local": "本地",
+    "settings.deploy.mode.vercel": "Vercel",
+    "settings.deploy.mode.docker": "Docker",
+    "settings.deploy.dbUrl": "DATABASE_URL",
+    "settings.deploy.dbUrl.placeholder": "postgresql://user:password@host:5432/dbname",
+    "settings.deploy.dbUrl.desc": "云端部署只需填入 PostgreSQL 连接串，自动解析并注册仓库。",
+    "settings.deploy.llm": "LLM API Key 配置",
+    "settings.deploy.llm.desc": "配置各 AI 服务商的 API Key，存入数据库持久化。",
+    "settings.deploy.llm.provider": "服务商",
+    "settings.deploy.llm.key": "API Key",
+    "settings.deploy.llm.key.placeholder": "sk-...",
+    "settings.deploy.llm.baseURL": "自定义端点 (可选)",
+    "settings.deploy.llm.save": "保存",
+    "settings.deploy.llm.saved": "已保存",
+
     // Settings — Tasks
     "settings.tasks.count": "{n} 个定时任务",
     "settings.tasks.add": "添加任务",
@@ -430,6 +449,25 @@ const dict: Record<Lang, Record<string, string>> = {
     "settings.memory.chatHistory.confirmFull": "This will permanently delete all chat messages. Continue?",
     "settings.memory.chatHistory.deleted": "Chat history cleared",
     "settings.memory.chatHistory.error": "Delete failed, please retry",
+
+    // Settings — Deployment
+    "settings.deploy.title": "Deployment Mode",
+    "settings.deploy.desc": "Choose your runtime environment. In cloud mode, LLM API keys are stored in the database.",
+    "settings.deploy.mode": "Deployment Mode",
+    "settings.deploy.mode.local": "Local",
+    "settings.deploy.mode.vercel": "Vercel",
+    "settings.deploy.mode.docker": "Docker",
+    "settings.deploy.dbUrl": "DATABASE_URL",
+    "settings.deploy.dbUrl.placeholder": "postgresql://user:password@host:5432/dbname",
+    "settings.deploy.dbUrl.desc": "Paste your PostgreSQL connection string. The app auto-parses it and registers the warehouse.",
+    "settings.deploy.llm": "LLM API Keys",
+    "settings.deploy.llm.desc": "Configure API keys for each AI provider. Stored in the database for persistence.",
+    "settings.deploy.llm.provider": "Provider",
+    "settings.deploy.llm.key": "API Key",
+    "settings.deploy.llm.key.placeholder": "sk-...",
+    "settings.deploy.llm.baseURL": "Custom Endpoint (optional)",
+    "settings.deploy.llm.save": "Save",
+    "settings.deploy.llm.saved": "Saved",
 
     // Settings — Tasks
     "settings.tasks.count": "{n} task(s)",

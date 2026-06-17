@@ -29,6 +29,7 @@ export interface WarehouseConfig {
   summaryCount?: number;
   contextMode?: string;
   debugMode?: boolean;
+  deploymentMode?: "local" | "vercel" | "docker";
   createdAt: string;
 }
 
@@ -48,6 +49,7 @@ export interface WarehouseListItem {
   summaryCount?: number;
   contextMode?: string;
   debugMode?: boolean;
+  deploymentMode?: "local" | "vercel" | "docker";
   createdAt: string;
 }
 
@@ -115,12 +117,42 @@ export async function testConnection(
   }
 }
 
+function bootstrapFromEnv(): WarehouseConfig | null {
+  const url = process.env.DATABASE_URL;
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return {
+      id: "wh_default",
+      name: "默认仓库",
+      host: parsed.hostname,
+      port: parseInt(parsed.port || "5432", 10),
+      user: parsed.username || "",
+      password: parsed.password || "",
+      database: parsed.pathname.slice(1) || "postgres",
+      deploymentMode: "vercel",
+      createdAt: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getWarehouseClient(warehouseId: string): PrismaClient | null {
   if (clientCache.has(warehouseId)) {
     return clientCache.get(warehouseId)!;
   }
 
   const warehouses = readWarehouses();
+
+  // Auto-bootstrap from DATABASE_URL if no warehouses configured
+  if (warehouses.size === 0) {
+    const bootCfg = bootstrapFromEnv();
+    if (bootCfg) {
+      warehouses.set(bootCfg.id, bootCfg);
+    }
+  }
+
   const cfg = warehouses.get(warehouseId);
   if (!cfg) return null;
 
@@ -240,6 +272,7 @@ export function updateWarehouse(
     summaryCount?: number;
     contextMode?: string;
     debugMode?: boolean;
+    deploymentMode?: "local" | "vercel" | "docker";
   }
 ): { success: boolean; error?: string } {
   try {
@@ -261,6 +294,7 @@ export function updateWarehouse(
     if (updates.summaryCount !== undefined) cfg.summaryCount = updates.summaryCount;
     if (updates.contextMode !== undefined) cfg.contextMode = updates.contextMode;
     if (updates.debugMode !== undefined) cfg.debugMode = updates.debugMode;
+    if (updates.deploymentMode !== undefined) cfg.deploymentMode = updates.deploymentMode;
     warehouses.set(id, cfg);
     writeWarehouses(warehouses);
     return { success: true };
@@ -291,11 +325,62 @@ export async function listWarehouses(): Promise<WarehouseListItem[]> {
       summaryCount: cfg.summaryCount,
       contextMode: cfg.contextMode,
       debugMode: cfg.debugMode,
+      deploymentMode: cfg.deploymentMode || "local",
       createdAt: cfg.createdAt,
     });
   }
 
   return results;
+}
+
+// ── StoreMeta helpers ──
+export async function loadStoreMeta(prisma: PrismaClient): Promise<Record<string, string>> {
+  try {
+    const rows = await (prisma as any).storeMeta.findMany();
+    const map: Record<string, string> = {};
+    for (const r of rows) map[r.key] = r.value;
+    return map;
+  } catch {
+    return {};
+  }
+}
+
+export async function saveStoreMeta(prisma: PrismaClient, settings: Record<string, string>): Promise<void> {
+  try {
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === null || value === undefined) continue;
+      await (prisma as any).storeMeta.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value },
+      });
+    }
+  } catch {}
+}
+
+// ── LLMConfig helpers ──
+export async function loadLLMConfigs(prisma: PrismaClient): Promise<Array<{ provider: string; apiKey: string; baseURL: string | null }>> {
+  try {
+    return await (prisma as any).lLMConfig.findMany();
+  } catch {
+    return [];
+  }
+}
+
+export async function saveLLMConfig(prisma: PrismaClient, provider: string, apiKey: string, baseURL?: string): Promise<void> {
+  try {
+    await (prisma as any).lLMConfig.upsert({
+      where: { provider },
+      update: { apiKey, baseURL: baseURL || null },
+      create: { provider, apiKey, baseURL: baseURL || null },
+    });
+  } catch {}
+}
+
+export async function deleteLLMConfig(prisma: PrismaClient, provider: string): Promise<void> {
+  try {
+    await (prisma as any).lLMConfig.deleteMany({ where: { provider } });
+  } catch {}
 }
 
 export function getWarehouseConfig(id: string): WarehouseConfig | null {
@@ -370,6 +455,16 @@ async function initSchema(client: PrismaClient): Promise<void> {
       "enabled" BOOLEAN NOT NULL DEFAULT true,
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS "StoreMeta" (
+      "key" TEXT PRIMARY KEY,
+      "value" TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS "LLMConfig" (
+      "id" TEXT PRIMARY KEY,
+      "provider" TEXT NOT NULL UNIQUE,
+      "apiKey" TEXT NOT NULL,
+      "baseURL" TEXT
     );
   `;
   await client.$executeRawUnsafe(sql);

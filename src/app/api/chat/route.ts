@@ -32,6 +32,21 @@ export async function POST(req: Request) {
     const contextMode = cfg?.contextMode || "recent";
     const debugMode = cfg?.debugMode ?? false;
     const customPrompt = cfg?.customPrompt;
+    const deploymentMode = cfg?.deploymentMode || "local";
+
+    // ── LLM keys: cloud deployments load from DB ──
+    if (deploymentMode !== "local") {
+      const { setLLMKeyOverrides } = await import("@/agent/router");
+      const { loadLLMConfigs } = await import("@/lib/connections");
+      try {
+        const configs = await loadLLMConfigs(prisma);
+        if (configs.length > 0) {
+          const map: Record<string, { apiKey: string; baseURL?: string }> = {};
+          for (const c of configs) map[c.provider] = { apiKey: c.apiKey, baseURL: c.baseURL || undefined };
+          setLLMKeyOverrides(map);
+        }
+      } catch {}
+    }
 
     // ── AI name ──
     let aiName = "小鞠";

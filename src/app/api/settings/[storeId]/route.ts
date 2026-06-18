@@ -76,16 +76,23 @@ export async function PUT(
       }
     }
 
-    // Persist custom regex rules to StoreMeta (strip to minimal format)
+    // Persist custom regex rules — merge with existing, skip duplicates
     if (body.customRegexRules !== undefined) {
       const prisma = getPrisma(storeId);
       if (prisma) {
-        const minimal = (body.customRegexRules || []).map((r: any) => ({
+        const existing = await loadApprovedRegex(prisma).catch(() => [] as { pattern: string; action: string }[]);
+        const incoming = (body.customRegexRules || []).map((r: any) => ({
           pattern: r.pattern || r.source || "",
           action: r.action || "query",
         }));
+        // Merge: keep existing, add only new patterns
+        for (const rule of incoming) {
+          if (rule.pattern && !existing.some((e) => e.pattern === rule.pattern)) {
+            existing.push(rule);
+          }
+        }
         await saveStoreMeta(prisma, {
-          custom_regex_rules: JSON.stringify(minimal),
+          custom_regex_rules: JSON.stringify(existing),
         }).catch(() => {});
       }
     }

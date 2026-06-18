@@ -371,40 +371,29 @@ export async function saveStoreMeta(prisma: PrismaClient, settings: Record<strin
 // ── Approved Regex helpers ──
 
 export async function loadApprovedRegex(prisma: PrismaClient): Promise<Array<{ pattern: string; action: string }>> {
-  // Load both user-edited rules and L5-approved rules, merge them
   const meta: Record<string, string> = await loadStoreMeta(prisma).catch(() => ({} as Record<string, string>));
-  const all: { pattern: string; action: string }[] = [];
-
-  // L5-approved rules (from chat approval)
-  if (meta.approved_regex_rules) {
-    try { all.push(...JSON.parse(meta.approved_regex_rules)); } catch {}
-  }
-
-  // User-edited rules (from settings, seeded from REGEX_RULES on first access)
   if (meta.custom_regex_rules) {
-    try { all.push(...JSON.parse(meta.custom_regex_rules)); } catch {}
-  } else {
-    // First access: seed from REGEX_RULES defaults into custom_regex_rules (settings-managed)
-    try {
-      const { REGEX_RULES } = await import("@/agent/intent/classifier");
-      const seed = REGEX_RULES.map((r: any) => ({ pattern: r.source, action: r.action }));
-      await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(seed) });
-      all.push(...seed);
-    } catch {}
+    try { return JSON.parse(meta.custom_regex_rules); } catch {}
   }
 
-  return all;
+  // First access: seed from REGEX_RULES defaults
+  try {
+    const { REGEX_RULES } = await import("@/agent/intent/classifier");
+    const seed = REGEX_RULES.map((r: any) => ({ pattern: r.source, action: r.action }));
+    await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(seed) });
+    return seed;
+  } catch {
+    return [];
+  }
 }
 
 export async function saveApprovedRegex(prisma: PrismaClient, pattern: string, action: string): Promise<void> {
-  // Save to approved_regex_rules (separate from custom_regex_rules to avoid overwrite)
-  const meta: Record<string, string> = await loadStoreMeta(prisma).catch(() => ({} as Record<string, string>));
-  const approved: { pattern: string; action: string }[] = [];
-  if (meta.approved_regex_rules) {
-    try { approved.push(...JSON.parse(meta.approved_regex_rules)); } catch {}
+  const rules = await loadApprovedRegex(prisma);
+  // Dedup: skip if pattern already exists
+  if (!rules.some((r) => r.pattern === pattern)) {
+    rules.push({ pattern, action });
+    await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(rules) });
   }
-  approved.push({ pattern, action });
-  await saveStoreMeta(prisma, { approved_regex_rules: JSON.stringify(approved) });
 }
 
 // ── LLMConfig helpers ──

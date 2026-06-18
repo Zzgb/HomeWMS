@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
-import { saveApprovedRegex, loadStoreMeta, saveStoreMeta } from "@/lib/connections";
+import { saveApprovedRegex } from "@/lib/connections";
 
 export async function POST(
   request: NextRequest,

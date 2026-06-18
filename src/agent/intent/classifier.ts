@@ -153,7 +153,7 @@ export const REGEX_RULES: RegexRuleMeta[] = [
 ];
 
 const CHAT_ONLY = /^(你好|hi|hello|hey|谢谢|thank|thanks|再见|bye|早上好|晚上好|下午好|晚安|ok|好的|嗯|哦|啊|哈哈|嘿嘿)[\s!！。.~～,，]*$/i;
-const RENAME_ZH = /(?:叫你|改名|名字改成|以后叫你?)(.+)/;
+const RENAME_ZH = /(?:叫你|改名|名字改成|以后叫你?)(?:为[:：]?)?\s*(.+?)(?:[，,。！!？?\s：:]|$)/;
 const RENAME_EN = /(?:call\s+(?:you|me|yourself)\s+|rename\s+(?:to\s+)?|change\s+(?:your\s+)?name\s+to\s+)(.+)/i;
 
 // Quantity: Arabic + Chinese numerals with measure words (bilingual)
@@ -219,7 +219,7 @@ function getSignals(msg: string) {
 
 // ── Keyword extraction ──
 
-const VERB_CLEANUP_ZH = /仓库|清空|清空仓库|全部清空|分成|分品牌|拆分|分割|拆开|重组|分类|分一下|分开|吃了|喝了|用了|扔了|丢了|吃完|喝完|用完|扔掉|丢掉|消灭|干掉|处理掉|坏掉|坏[了掉]|过期|变质|发霉|取出|出库|消耗|买了|入库|放进|放到|放在|放入|收到|添加|新增|采购|进货|搬到|移到|挪到|移动|搬运|删除|去掉|移除|清理掉|盘点|查看|看看|库存/g;
+const VERB_CLEANUP_ZH = /仓库|清空|清空仓库|全部清空|分成|分品牌|拆分|分割|拆开|重组|分类|分一下|分开|吃了|喝了|用了|扔了|丢了|吃完|喝完|用完|扔掉|丢掉|消灭|干掉|处理掉|坏掉|坏[了掉]|过期|变质|发霉|取出|出库|消耗|买了|入库|放进|放到|放在|放入|收到|添加|新增|采购|进货|搬到|移到|挪到|移动|搬运|删除|去掉|移除|清理掉|盘点|查看|看看|库存|哦不对|哦不|不对|应该是|那就是|其实是|刚才是|原来是|的话|调整|改为|改成|重新/g;
 const PARTICLE_ZH = /[的了把被刚才已经都还要想去来一下这个那个什么怎么还也会不操作搞做没][了吗呢吧啊呀]/g; // require 2-char particle to avoid destroying keywords like 不锈钢→锈钢
 const PUNCT_ZH = /[\s,，。！!？?、：:；;…\-—]+/g;
 
@@ -280,8 +280,8 @@ function extractTarget(msg: string): string | undefined {
 
 // ── Multi-clause splitting (zh mostly) ──
 
-const CLAUSE_BREAK = /[，,]\s*(?:又|还|也|再|然后|接着|还有|and\s+also|and\s+then|also\s+got|also\s+bought)/g;
-const CLAUSE_MARKER = /[，,]\s*(?:又|还|也|再|然后|接着|还有|and\s+also|and\s+then)/;
+const CLAUSE_BREAK = /[，,]\s*(?:又|还|也|再|然后|接着|还有|哦|刚才|刚刚|不过|但是|但|其实|另外|此外|and\s+also|and\s+then|also\s+got|also\s+bought)/g;
+const CLAUSE_MARKER = /[，,]\s*(?:又|还|也|再|然后|接着|还有|哦|刚才|刚刚|不过|但是|但|其实|另外|此外|and\s+also|and\s+then)/;
 
 function splitClauses(msg: string): string[] | null {
   if (!CLAUSE_MARKER.test(msg)) return null;

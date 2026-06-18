@@ -18,9 +18,8 @@ export async function generateResponse(input: ResponseInput) {
 
   const messages = [...contextMessages, userMessage];
 
-  // Combine timeout + client disconnect signal so onFinish fires on abort
-  const timeout = AbortSignal.timeout(60_000);
-  const abortSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  // Use only timeout (ignore client disconnect so AI keeps generating on page switch)
+  const abortSignal = AbortSignal.timeout(60_000);
 
   const result = streamText({
     model: getModel(modelId),

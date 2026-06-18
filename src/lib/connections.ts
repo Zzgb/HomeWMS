@@ -185,7 +185,6 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
         fixPool.query(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`),
         fixPool.query(`ALTER TABLE "Stock" ADD COLUMN IF NOT EXISTS "expiryDate" TIMESTAMP(3)`),
         fixPool.query(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "aiName" TEXT`),
-        // Ensure StoreMeta and LLMConfig tables exist (for databases created before these were added)
         fixPool.query(`CREATE TABLE IF NOT EXISTS "StoreMeta" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL)`),
         fixPool.query(`CREATE TABLE IF NOT EXISTS "LLMConfig" ("id" TEXT PRIMARY KEY, "provider" TEXT NOT NULL, "modelId" TEXT NOT NULL DEFAULT '', "apiKey" TEXT NOT NULL, "baseURL" TEXT, "label" TEXT)`),
       ]).catch(() => {}).finally(() => fixPool.end());
@@ -372,36 +371,40 @@ export async function saveStoreMeta(prisma: PrismaClient, settings: Record<strin
 // ── Approved Regex helpers ──
 
 export async function loadApprovedRegex(prisma: PrismaClient): Promise<Array<{ pattern: string; action: string }>> {
-  try {
-    const meta = await loadStoreMeta(prisma);
-    if (meta.custom_regex_rules) {
-      try {
-        return JSON.parse(meta.custom_regex_rules);
-      } catch (parseErr) {
-        // Data corrupted — don't overwrite, return empty so user can fix via settings
-        console.error("[loadApprovedRegex] Failed to parse custom_regex_rules, returning empty:", parseErr);
-        return [];
-      }
-    }
-  } catch {
-    // loadStoreMeta failed
+  // Load both user-edited rules and L5-approved rules, merge them
+  const meta: Record<string, string> = await loadStoreMeta(prisma).catch(() => ({} as Record<string, string>));
+  const all: { pattern: string; action: string }[] = [];
+
+  // L5-approved rules (from chat approval)
+  if (meta.approved_regex_rules) {
+    try { all.push(...JSON.parse(meta.approved_regex_rules)); } catch {}
   }
 
-  // First access (key doesn't exist): seed from REGEX_RULES defaults
-  try {
-    const { REGEX_RULES } = await import("@/agent/intent/classifier");
-    const seed = REGEX_RULES.map((r) => ({ pattern: r.source, action: r.action }));
-    await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(seed) });
-    return seed;
-  } catch {
-    return [];
+  // User-edited rules (from settings, seeded from REGEX_RULES on first access)
+  if (meta.custom_regex_rules) {
+    try { all.push(...JSON.parse(meta.custom_regex_rules)); } catch {}
+  } else {
+    // First access: seed from REGEX_RULES defaults into custom_regex_rules (settings-managed)
+    try {
+      const { REGEX_RULES } = await import("@/agent/intent/classifier");
+      const seed = REGEX_RULES.map((r: any) => ({ pattern: r.source, action: r.action }));
+      await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(seed) });
+      all.push(...seed);
+    } catch {}
   }
+
+  return all;
 }
 
 export async function saveApprovedRegex(prisma: PrismaClient, pattern: string, action: string): Promise<void> {
-  const rules = await loadApprovedRegex(prisma);
-  rules.push({ pattern, action });
-  await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(rules) });
+  // Save to approved_regex_rules (separate from custom_regex_rules to avoid overwrite)
+  const meta: Record<string, string> = await loadStoreMeta(prisma).catch(() => ({} as Record<string, string>));
+  const approved: { pattern: string; action: string }[] = [];
+  if (meta.approved_regex_rules) {
+    try { approved.push(...JSON.parse(meta.approved_regex_rules)); } catch {}
+  }
+  approved.push({ pattern, action });
+  await saveStoreMeta(prisma, { approved_regex_rules: JSON.stringify(approved) });
 }
 
 // ── LLMConfig helpers ──
@@ -506,8 +509,6 @@ export function getWarehouseConfig(id: string): WarehouseConfig | null {
 
 // ── Schema initialization ──
 async function initSchema(client: PrismaClient): Promise<void> {
-  // Drop legacy Store table (no longer used)
-  try { await client.$executeRawUnsafe(`DROP TABLE IF EXISTS "Store"`); } catch {}
   // Fix old schema: drop storeId columns from old single-DB days
   try { await client.$executeRawUnsafe(`ALTER TABLE "Item" DROP COLUMN IF EXISTS "storeId"`); } catch {}
   try { await client.$executeRawUnsafe(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`); } catch {}

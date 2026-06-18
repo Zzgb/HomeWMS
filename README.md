@@ -176,6 +176,8 @@ src/
 | **Message** | id, role, content, toolCalls(JSONB), tokenCount, aiName | createdAt 索引 |
 | **Summary** | id, content (LLM 英文压缩) | createdAt 索引 |
 | **Task** | id, type, cron, lastRun, enabled | — |
+| **StoreMeta** | key (PK), value | 键值配置（customRegexRules、activeLlmConfigId 等） |
+| **LLMConfig** | id, provider, modelId, apiKey, baseURL, label | 云端 LLM API Key 存储 |
 
 ## 配置
 
@@ -191,6 +193,8 @@ src/
 | `summaryCount` | 上下文包含摘要数 (1-10) | 3 |
 | `debugMode` | 完整上下文写 Log | false |
 | `customPrompt` | 自定义系统提示词 | 空 (使用默认) |
+| `deploymentMode` | 部署方式: local / vercel / docker | local |
+| `customRegexRules` | 自定义正则规则（StoreMeta） | L0 默认规则 |
 
 ## 部署
 
@@ -219,29 +223,29 @@ pnpm build && pnpm start  # 生产模式，推荐 pm2 或 systemd 守护
 | 部署方式 | 状态 | 说明 |
 |---------|------|------|
 | 本地 Node.js | ✅ 已支持 | `warehouses.json` 管理连接，完整表单配置 |
-| Vercel | 🚧 开发中 | 需要 `DATABASE_URL` 环境变量引导 + `StoreMeta` 表持久化配置 |
-| Docker | 🚧 开发中 | 环境变量注入 + volume 挂载 warehouses.json |
+| Vercel | ✅ 已支持 | `DATABASE_URL` 环境变量引导 + `StoreMeta` 表持久化 + localStorage 缓存 |
+| Docker | ✅ 已支持 | 环境变量注入 + volume 挂载 warehouses.json |
 
 ---
 
 ## 开发计划
 
-### P0 — 部署与配置
+### P0 — 部署与配置 ✅
 
-- [ ] **Vercel 部署持久化** — `DATABASE_URL` 环境变量自动引导默认仓库，`StoreMeta` 表持久化仓库配置，解决 Vercel 文件系统临时性导致 `warehouses.json` 写入丢失
-- [ ] **部署方式选项** — 设置页加部署方式选择（本地 / Vercel / Docker），数据库连接字段按部署方式适配
-- [ ] **自定义提示词可用性验证** — 确认 settings API GET/PUT customPrompt 正常，prompts.ts 中 customPrompt 覆盖 SYSTEM_PROMPT 逻辑正确
+- [x] **Vercel 部署持久化** — `DATABASE_URL` + `StoreMeta` 表 + localStorage 缓存
+- [x] **部署方式选项** — 设置页独立部署 Tab（本地/Vercel/Docker），按模式适配
+- [x] **自定义提示词** — settings → API → chat route → agent → assembleContext 全链路
 
-### P0 — AI 规则前台
+### P0 — AI 规则前台 ✅
 
-- [ ] **设置页展示全部 AI 规则** — L0 正则规则列表 + 自定义提示词编辑 + L1 分类 prompt 展示 + L5 正则候选审批入口
-- [ ] **正则学习审批前端** — learner.ts 已将候选正则写入 Log(action=regex_candidate)，需要设置页/对话中展示候选正则 → 用户审批「批准/拒绝/修改」→ 批准后正则写入 StoreMeta，L0 动态加载
+- [x] **设置页展示全部 AI 规则** — 模型 Tab 可编辑正则规则表，StoreMeta 持久化
+- [x] **正则学习审批前端** — 对话页 AI 消息卡片展示候选正则，批准后修改对应规则
 
-### P1 — 功能增强
+### P1 — 功能增强 ✅
 
-- [ ] 定时盘点结果输出到聊天页（scheduler → 写 Message 表）
-- [ ] 删除聊天记录（压缩摘要删除 + 全量删除）
-- [ ] 摘要压缩开关/频率设置
+- [x] 定时盘点结果输出到聊天页
+- [x] 删除聊天记录（压缩删除 + 全量删除）
+- [x] 摘要压缩开关/频率设置
 
 ## License
 

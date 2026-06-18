@@ -16,7 +16,7 @@ export async function generateResponse(input: ResponseInput) {
     signal,
   } = input;
 
-  const messages = [userMessage, ...contextMessages];
+  const messages = [...contextMessages, userMessage];
 
   // Combine timeout + client disconnect signal so onFinish fires on abort
   const timeout = AbortSignal.timeout(60_000);

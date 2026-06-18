@@ -50,6 +50,8 @@ import {
   Globe,
   Clock,
   Calendar,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // Types
@@ -147,7 +149,15 @@ export default function SettingsPage() {
   const [customModelInput, setCustomModelInput] = useState("");
   const [savingModel, setSavingModel] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
-  const [deploymentMode, setDeploymentMode] = useState("local");
+  const [regexExpanded, setRegexExpanded] = useState(false);
+  const [customRegexRules, setCustomRegexRules] = useState<any[]>([]);
+  const [savingRules, setSavingRules] = useState(false);
+  const [deploymentMode, setDeploymentMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("deploymentMode") || "local";
+    }
+    return "local";
+  });
 
   // Cloud mode state
   type CloudConnection = { id: string; label: string; url: string; storeId?: string; createdAt: string };
@@ -280,13 +290,50 @@ export default function SettingsPage() {
         if (data?.customPrompt !== undefined) {
           setCustomPrompt(data.customPrompt);
         }
-        if (data?.deploymentMode !== undefined) {
-          setDeploymentMode(data.deploymentMode);
+        if (data?.customRegexRules) {
+          setCustomRegexRules(data.customRegexRules.map((r: any) => ({
+            ...r,
+            id: r.id || `r_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+          })));
         }
         setLoadingConfig(false);
       })
       .catch(() => setLoadingConfig(false));
   }, [storeId]);
+
+  async function handleSaveRules() {
+    if (!storeId) return;
+    setSavingRules(true);
+    try {
+      const res = await fetch(`/api/settings/${encodeURIComponent(storeId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customRegexRules }),
+      });
+      if (!res.ok) throw new Error("Failed");
+    } catch (e) {
+      console.error("Save rules failed:", e);
+    } finally {
+      setSavingRules(false);
+    }
+  }
+
+  function updateRule(ruleId: string, field: string, value: string) {
+    setCustomRegexRules((prev) =>
+      prev.map((r) => (r.id === ruleId ? { ...r, [field]: value } : r))
+    );
+  }
+
+  function deleteRule(ruleId: string) {
+    setCustomRegexRules((prev) => prev.filter((r) => r.id !== ruleId));
+  }
+
+  function addRule(action?: string) {
+    setCustomRegexRules((prev) => [
+      ...prev,
+      { id: `r_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, pattern: "", action: action || "query" },
+    ]);
+  }
 
   // ── Cloud connection helpers ──
   function saveCloudConns(conns: CloudConnection[]) {
@@ -853,7 +900,7 @@ export default function SettingsPage() {
               <CardDescription>{t("settings.deploy.desc")}</CardDescription>
             </CardHeader>
             <CardContent>
-              <Select value={deploymentMode} onValueChange={(v) => { setDeploymentMode(v); setTimeout(() => handleSaveDeployment(), 0); }}>
+              <Select value={deploymentMode} onValueChange={(v) => { setDeploymentMode(v); localStorage.setItem("deploymentMode", v); setTimeout(() => handleSaveDeployment(), 0); }}>
                 <SelectTrigger className="w-36 h-8 text-xs">
                   <SelectValue>
                     {{ local: t("settings.deploy.mode.local"), vercel: t("settings.deploy.mode.vercel"), docker: t("settings.deploy.mode.docker") }[deploymentMode] || deploymentMode}
@@ -1106,6 +1153,106 @@ export default function SettingsPage() {
                     />
                     <p className="text-xs text-muted-foreground">{t("settings.model.prompt.desc")}</p>
                   </div>
+
+                  {/* Regex Rules List (Editable) */}
+                  <Card className="mt-6">
+                    <CardHeader
+                      className="cursor-pointer select-none"
+                      onClick={() => setRegexExpanded(!regexExpanded)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">
+                            {t("settings.model.regex.title")}
+                          </CardTitle>
+                          <CardDescription>
+                            {t("settings.model.regex.desc")}
+                          </CardDescription>
+                        </div>
+                        <Button variant="ghost" size="sm" className="gap-1">
+                          {regexExpanded ? (
+                            <>
+                              <ChevronUp className="h-4 w-4" />
+                              {t("settings.model.regex.collapse")}
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4" />
+                              {t("settings.model.regex.expand", { n: customRegexRules.length })}
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {(() => {
+                        const ACTIONS = ["consume", "stockIn", "move", "delete", "restructure", "query", "chat", "rename"];
+                        const displayRules = regexExpanded ? customRegexRules : customRegexRules.slice(0, 8);
+                        return ACTIONS.map((action) => {
+                          const groupRules = displayRules.filter((r: any) => (r.action || "query") === action);
+                          if (!regexExpanded && groupRules.length === 0) return null;
+                          return (
+                            <div key={action} className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs font-mono">{action}</Badge>
+                                <span className="text-xs text-muted-foreground">{groupRules.length} rules</span>
+                              </div>
+                              {groupRules.map((rule: any) => (
+                                <div key={rule.id} className="flex items-center gap-2">
+                                  <Input
+                                    className="h-8 text-xs font-mono flex-1"
+                                    value={rule.pattern || ""}
+                                    onChange={(e) => updateRule(rule.id, "pattern", e.target.value)}
+                                    placeholder={`regex for ${action}...`}
+                                  />
+                                  <Select
+                                    value={rule.action || "query"}
+                                    onValueChange={(v) => updateRule(rule.id, "action", v)}
+                                  >
+                                    <SelectTrigger className="h-8 w-[110px] text-xs shrink-0">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {ACTIONS.map((a) => (
+                                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 shrink-0"
+                                    onClick={() => deleteRule(rule.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs text-muted-foreground"
+                                onClick={() => addRule(action)}
+                              >
+                                <Plus className="h-3 w-3 mr-1" /> {action}
+                              </Button>
+                            </div>
+                          );
+                        });
+                      })()}
+                      <div className="flex items-center gap-2 pt-2 border-t">
+                        <Button variant="outline" size="sm" onClick={() => addRule()}>
+                          <Plus className="h-3 w-3 mr-1" />
+                          {t("settings.model.regex.addRule")}
+                        </Button>
+                        <Button size="sm" onClick={handleSaveRules} disabled={savingRules}>
+                          {savingRules && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                          <Check className="h-3 w-3 mr-1" />
+                          {t("settings.model.regex.saveRules")}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   <Button
                     onClick={handleSaveModel}

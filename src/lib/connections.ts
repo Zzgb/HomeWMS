@@ -185,6 +185,9 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
         fixPool.query(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`),
         fixPool.query(`ALTER TABLE "Stock" ADD COLUMN IF NOT EXISTS "expiryDate" TIMESTAMP(3)`),
         fixPool.query(`ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "aiName" TEXT`),
+        // Ensure StoreMeta and LLMConfig tables exist (for databases created before these were added)
+        fixPool.query(`CREATE TABLE IF NOT EXISTS "StoreMeta" ("key" TEXT PRIMARY KEY, "value" TEXT NOT NULL)`),
+        fixPool.query(`CREATE TABLE IF NOT EXISTS "LLMConfig" ("id" TEXT PRIMARY KEY, "provider" TEXT NOT NULL, "modelId" TEXT NOT NULL DEFAULT '', "apiKey" TEXT NOT NULL, "baseURL" TEXT, "label" TEXT)`),
       ]).catch(() => {}).finally(() => fixPool.end());
     }
 
@@ -356,16 +359,49 @@ export async function loadStoreMeta(prisma: PrismaClient): Promise<Record<string
 }
 
 export async function saveStoreMeta(prisma: PrismaClient, settings: Record<string, string>): Promise<void> {
+  for (const [key, value] of Object.entries(settings)) {
+    if (value === null || value === undefined) continue;
+    await (prisma as any).storeMeta.upsert({
+      where: { key },
+      update: { value },
+      create: { key, value },
+    });
+  }
+}
+
+// ── Approved Regex helpers ──
+
+export async function loadApprovedRegex(prisma: PrismaClient): Promise<Array<{ pattern: string; action: string }>> {
   try {
-    for (const [key, value] of Object.entries(settings)) {
-      if (value === null || value === undefined) continue;
-      await (prisma as any).storeMeta.upsert({
-        where: { key },
-        update: { value },
-        create: { key, value },
-      });
+    const meta = await loadStoreMeta(prisma);
+    if (meta.custom_regex_rules) {
+      try {
+        return JSON.parse(meta.custom_regex_rules);
+      } catch (parseErr) {
+        // Data corrupted — don't overwrite, return empty so user can fix via settings
+        console.error("[loadApprovedRegex] Failed to parse custom_regex_rules, returning empty:", parseErr);
+        return [];
+      }
     }
-  } catch {}
+  } catch {
+    // loadStoreMeta failed
+  }
+
+  // First access (key doesn't exist): seed from REGEX_RULES defaults
+  try {
+    const { REGEX_RULES } = await import("@/agent/intent/classifier");
+    const seed = REGEX_RULES.map((r) => ({ pattern: r.source, action: r.action }));
+    await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(seed) });
+    return seed;
+  } catch {
+    return [];
+  }
+}
+
+export async function saveApprovedRegex(prisma: PrismaClient, pattern: string, action: string): Promise<void> {
+  const rules = await loadApprovedRegex(prisma);
+  rules.push({ pattern, action });
+  await saveStoreMeta(prisma, { custom_regex_rules: JSON.stringify(rules) });
 }
 
 // ── LLMConfig helpers ──
@@ -470,6 +506,8 @@ export function getWarehouseConfig(id: string): WarehouseConfig | null {
 
 // ── Schema initialization ──
 async function initSchema(client: PrismaClient): Promise<void> {
+  // Drop legacy Store table (no longer used)
+  try { await client.$executeRawUnsafe(`DROP TABLE IF EXISTS "Store"`); } catch {}
   // Fix old schema: drop storeId columns from old single-DB days
   try { await client.$executeRawUnsafe(`ALTER TABLE "Item" DROP COLUMN IF EXISTS "storeId"`); } catch {}
   try { await client.$executeRawUnsafe(`ALTER TABLE "Spot" DROP COLUMN IF EXISTS "storeId"`); } catch {}

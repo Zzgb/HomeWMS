@@ -5,6 +5,7 @@ import { assembleContext } from "@/agent/context/assembler";
 import { generateResponse } from "@/agent/response/generator";
 import { checkCorrection } from "@/agent/correction/checker";
 import { recordCorrection, maybeLearn } from "@/agent/correction/learner";
+import { loadApprovedRegex } from "@/lib/connections";
 import type { ToolResult } from "@/agent/orchestrator/types";
 import type { Conflict } from "@/agent/context/types";
 import { messageService } from "@/services/message.service";
@@ -38,7 +39,7 @@ async function runSinglePass(
   // ── Layer 2: Execute tools ──
   let toolResults: ToolResult[] = [];
   if (intent.type !== "chat") {
-    const plan = await buildPlan(intent);
+    const plan = await buildPlan(intent, modelId);
     console.log(`[Agent:L2] Plan: ${plan.map((s: any) => s.toolName).join(" → ")}`);
     const result = await executePlan(tools, plan);
     toolResults = result.toolResults;
@@ -83,7 +84,12 @@ export async function runAgent(input: ChatInput) {
 
   // ── Layer 1: Classify intent (now returns Intent[]) ──
   console.log(`[Agent:L1] Classifying: "${userMessage.slice(0, 80)}"`);
-  const intents = await classifyIntent(userMessage, input.language, modelId);
+  // Load custom regex rules from StoreMeta (user-editable or L5-approved)
+  const storeRules = await loadApprovedRegex(prisma).catch(() => []);
+  const intents = await classifyIntent(
+    userMessage, input.language, modelId,
+    storeRules.length > 0 ? storeRules : undefined
+  );
   console.log(`[Agent:L1] ${intents.length} intent(s): ${intents.map(i => i.type + (i.type === "mutate" ? `:${(i as any).action}` : "")).join(", ")}`);
 
   // ── Layer 2-3: Execute each intent ──
@@ -163,9 +169,12 @@ export async function runAgent(input: ChatInput) {
       if (correctedPlans.length === 0) {
         const isFabrication = correction.reason.includes("FABRICATION");
         if (isFabrication) {
-          console.log(`[Agent:L5] Fabrication detected, re-running full classification + execution`);
-          // Re-classify with empty keyword fallback to trigger delete-all
-          const retryIntent = { type: "mutate" as const, action: "delete" as const, keyword: "" };
+          console.log(`[Agent:L5] Fabrication detected, re-running classification + execution`);
+          // Re-classify the original message (don't hardcode delete — user may have intended stockIn, move, etc.)
+          const retryIntents = await classifyIntent(userMessage, input.language, modelId,
+            await loadApprovedRegex(prisma).catch(() => [])
+          );
+          const retryIntent = retryIntents[0] || { type: "query" as const };
           try {
             const retryPass = await runSinglePass(input, retryIntent);
             const retryResults = retryPass.toolResults;

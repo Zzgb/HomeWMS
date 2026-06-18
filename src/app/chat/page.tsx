@@ -25,7 +25,10 @@ import {
   User,
   Bot,
   Package,
+  Check,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Store {
   id: string;
@@ -41,6 +44,10 @@ export default function ChatPage() {
   const [inputValue, setInputValue] = useState("");
   const [aiName, setAiName] = useState("小鞠");
   const { t } = useT();
+
+  // Regex candidate approval state
+  const [pendingCandidates, setPendingCandidates] = useState<any[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isComposingRef = useRef(false);
@@ -118,6 +125,70 @@ export default function ChatPage() {
       })
       .catch(() => {});
   }, [storeId]);
+
+  // ── Load pending regex candidates ──
+  const loadCandidates = useCallback(() => {
+    if (!storeId) return;
+    fetch(`/api/logs?storeId=${encodeURIComponent(storeId)}&action=regex_candidate&pageSize=10`)
+      .then((res) => (res.ok ? res.json() : { data: [] }))
+      .then((data) => {
+        const pending = (data.data || []).filter((log: any) => {
+          try {
+            const note = log.note ? JSON.parse(log.note) : null;
+            return note?.status === "pending_approval" || !note?.status;
+          } catch { return true; }
+        });
+        setPendingCandidates(pending);
+      })
+      .catch(() => {});
+  }, [storeId]);
+
+  useEffect(() => { loadCandidates(); }, [loadCandidates]);
+
+  // Reload candidates after each message turn (L5 may have generated new ones)
+  useEffect(() => {
+    if (status === "ready") {
+      setTimeout(() => loadCandidates(), 1500);
+    }
+  }, [status]);
+
+  async function handleApproveCandidate(logId: string, pattern: string, actionType: string) {
+    setApprovingId(logId);
+    try {
+      const res = await fetch(`/api/settings/${encodeURIComponent(storeId!)}/regex/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId, action: "approve", pattern, actionType }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setPendingCandidates((prev) => prev.filter((c) => c.id !== logId));
+      toast.success(t("regex.approved"));
+    } catch (e: any) {
+      console.error("[approve] Failed:", e?.message || e);
+      toast.error(t("regex.approveFailed"));
+    } finally { setApprovingId(null); }
+  }
+
+  async function handleRejectCandidate(logId: string) {
+    setApprovingId(logId);
+    try {
+      const res = await fetch(`/api/settings/${encodeURIComponent(storeId!)}/regex/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logId, action: "reject" }),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error(`[reject] HTTP ${res.status}: ${body}`);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      setPendingCandidates((prev) => prev.filter((c) => c.id !== logId));
+      toast.success(t("regex.rejected"));
+    } catch (e: any) {
+      console.error("[reject] Failed:", e?.message || e);
+      toast.error(t("regex.rejectFailed"));
+    } finally { setApprovingId(null); }
+  }
 
   const isLoading = status === "submitted" || status === "streaming";
 
@@ -373,6 +444,77 @@ export default function ChatPage() {
                   {error.message || t("chat.error")}
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {/* Pending Regex Candidates */}
+          {pendingCandidates.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-1">
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <Bot className="h-3 w-3" />
+                  AI
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {t("settings.model.regex.pending")} ({pendingCandidates.length})
+                </span>
+              </div>
+              {pendingCandidates.map((candidate: any) => {
+                let note: any = {};
+                try { note = candidate.note ? JSON.parse(candidate.note) : {}; } catch {}
+                const pattern = note.candidate || "";
+                const sourceCases = note.sourceCases || [];
+                const actionType = note.actionType || "";
+                return (
+                  <Card key={candidate.id} className="bg-card/60 backdrop-blur-sm border-border/50">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <code className="text-sm font-mono bg-muted px-2 py-0.5 rounded break-all">
+                          {pattern}
+                        </code>
+                        {actionType && (
+                          <Badge variant="outline" className="text-xs">{actionType}</Badge>
+                        )}
+                      </div>
+                      {sourceCases.length > 0 && (
+                        <details className="text-xs text-muted-foreground">
+                          <summary className="cursor-pointer">
+                            {t("settings.model.regex.sourceCases")} ({sourceCases.length})
+                          </summary>
+                          <ul className="mt-1 space-y-0.5 pl-4 list-disc">
+                            {sourceCases.map((c: string, i: number) => (
+                              <li key={i}>{c}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          disabled={approvingId === candidate.id}
+                          onClick={() => handleApproveCandidate(candidate.id, pattern, actionType)}
+                        >
+                          {approvingId === candidate.id ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Check className="h-3 w-3 mr-1" />
+                          )}
+                          {t("settings.model.regex.approve")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={approvingId === candidate.id}
+                          onClick={() => handleRejectCandidate(candidate.id)}
+                        >
+                          <X className="h-3 w-3 mr-1" />
+                          {t("settings.model.regex.reject")}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 

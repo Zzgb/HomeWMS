@@ -3,7 +3,7 @@ import { getModel } from "@/agent/router";
 import type { Intent } from "@/agent/intent/types";
 import type { CallStep } from "./types";
 
-export async function buildPlan(intent: Intent): Promise<CallStep[]> {
+export async function buildPlan(intent: Intent, modelId?: string): Promise<CallStep[]> {
   switch (intent.type) {
     case "query":
       return [
@@ -106,7 +106,7 @@ export async function buildPlan(intent: Intent): Promise<CallStep[]> {
       // If no splits specified, ask LLM to propose brands/sub-items
       let resolvedSplits = intent.splits;
       if (!resolvedSplits || resolvedSplits.length === 0) {
-        resolvedSplits = await resolveSplitsViaLLM(sourceKeyword);
+        resolvedSplits = await resolveSplitsViaLLM(sourceKeyword, modelId);
       }
 
       const findStep: CallStep = {
@@ -163,12 +163,13 @@ export async function buildPlan(intent: Intent): Promise<CallStep[]> {
 // ── LLM-based split resolution ──
 
 async function resolveSplitsViaLLM(
-  sourceKeyword: string
+  sourceKeyword: string,
+  modelId?: string
 ): Promise<{ newName: string; qty: number }[] | undefined> {
   if (!sourceKeyword) return undefined;
 
   try {
-    const model = getModel("deepseek/deepseek-v4-flash");
+    const model = getModel(modelId || "deepseek/deepseek-v4-flash");
     const { text } = await generateText({
       model,
       temperature: 0,

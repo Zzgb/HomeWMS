@@ -144,7 +144,7 @@ src/
 
 ## Database Schema
 
-Per-warehouse PostgreSQL database, 7 tables (Prisma auto-migrates):
+Per-warehouse PostgreSQL database, 9 tables (Prisma auto-migrates):
 
 | Table | Key Columns | Relations |
 |-------|------------|-----------|
@@ -155,6 +155,8 @@ Per-warehouse PostgreSQL database, 7 tables (Prisma auto-migrates):
 | **Message** | id, role, content, toolCalls(JSONB), tokenCount, aiName | Indexed: createdAt |
 | **Summary** | id, content (LLM compressed, English) | Indexed: createdAt |
 | **Task** | id, type, cron, lastRun, enabled | — |
+| **StoreMeta** | key (PK), value | Key-value config (customRegexRules, activeLlmConfigId, etc.) |
+| **LLMConfig** | id, provider, modelId, apiKey, baseURL, label | Cloud LLM API key storage |
 
 ## Configuration
 
@@ -169,57 +171,52 @@ Per-warehouse in `warehouses.json`:
 | `summaryThreshold` | Messages to trigger summary (10-500) | 50 |
 | `summaryCount` | Summaries in context (1-10) | 3 |
 | `debugMode` | Log full context to Log table | false |
+| `deploymentMode` | Deployment mode: local / vercel / docker | local |
+| `customRegexRules` | Custom regex rules (StoreMeta) | L0 defaults |
 
 ## Deployment
 
-### Local Deployment (the only currently supported method)
+All three deployment modes are supported:
 
-Vercel / Docker deployment is not yet supported (warehouse config persistence is under development).
+| Method | Status | Notes |
+|--------|--------|-------|
+| Local Node.js | ✅ Supported | `warehouses.json` connection management |
+| Vercel | ✅ Supported | `DATABASE_URL` env var + `StoreMeta` + localStorage |
+| Docker | ✅ Supported | Env var injection + volume mount for warehouses.json |
 
 ```bash
 git clone https://github.com/Zzgb/HomeWMS.git
 cd HomeWMS
 pnpm install
-# Create .env with DEEPSEEK_API_KEY + CRON_SECRET
 cp .env.example .env
 npx prisma generate
-pnpm dev   # Development mode
-# or
-pnpm build && pnpm start  # Production mode, use PM2 or systemd
+pnpm dev
 ```
 
-Open `http://localhost:3000` → Settings → add PostgreSQL connection (local or remote, standard PostgreSQL).
+Open `http://localhost:3000` → Settings → Deploy tab to choose mode and add PostgreSQL connection.
 
 External cron (optional): `curl -X POST http://localhost:3000/api/cron/run?secret=your-cron-secret`
-
-### Deployment Support Status
-
-| Method | Status | Notes |
-|--------|--------|-------|
-| Local Node.js | ✅ Supported | `warehouses.json` based connection management |
-| Vercel | 🚧 In progress | Needs `DATABASE_URL` env var bootstrap + `StoreMeta` table persistence |
-| Docker | 🚧 In progress | Env var injection + volume mount for warehouses.json |
 
 ---
 
 ## Roadmap
 
-### P0 — Deployment & Configuration
+### P0 — Deployment & Configuration ✅
 
-- [ ] **Vercel deployment persistence** — `DATABASE_URL` env var auto-bootstrap for default warehouse, `StoreMeta` table for persisting warehouse configs (solves Vercel ephemeral filesystem issue where `warehouses.json` writes are lost)
-- [ ] **Deployment method selector** — Settings page deployment mode (Local / Vercel / Docker), database connection fields adapt accordingly
-- [ ] **Custom prompt verification** — Confirm settings API GET/PUT customPrompt works, customPrompt overrides SYSTEM_PROMPT correctly
+- [x] **Vercel deployment persistence** — `DATABASE_URL` + `StoreMeta` table + localStorage cache
+- [x] **Deployment method selector** — Settings page deploy tab (Local/Vercel/Docker)
+- [x] **Custom prompt verification** — settings → API → chat route → agent → assembleContext chain
 
-### P0 — AI Rules Frontend
+### P0 — AI Rules Frontend ✅
 
-- [ ] **Settings page: all AI rules** — L0 regex patterns list + custom prompt editor + L1 classifier prompt display + L5 regex candidate approval entry
-- [ ] **Regex learning approval UI** — Learner.ts writes candidate regex to Log(action=regex_candidate); needs settings/chat UI to display candidates → user approve/reject/modify → approved regex stored in StoreMeta, loaded dynamically by L0
+- [x] **Settings page: all AI rules** — Model tab editable regex rules table, StoreMeta persistence
+- [x] **Regex learning approval UI** — Chat page AI card displays candidates, approve modifies rules
 
-### P1 — Feature Enhancements
+### P1 — Feature Enhancements ✅
 
-- [ ] Scheduled check results output to chat page (scheduler → write to Message table)
-- [ ] Delete chat history (compressed summary delete + full delete)
-- [ ] Summary compression toggle/frequency settings
+- [x] Scheduled check results output to chat page
+- [x] Delete chat history (compress + delete, full delete)
+- [x] Summary compression toggle/frequency settings
 
 ## License
 

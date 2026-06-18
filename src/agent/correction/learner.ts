@@ -123,7 +123,9 @@ export async function maybeLearn(prisma: any, modelId: string) {
     }
 
     const candidate = patternMatch[1].trim();
-    console.log(`[Learner] Generated candidate: ${candidate}`);
+    const actionMatch = text.match(/ACTION:\s*(\w+)/i);
+    const actionType = actionMatch ? actionMatch[1].trim() : "";
+    console.log(`[Learner] Generated candidate: ${candidate} → ${actionType || "unknown"}`);
 
     // Save candidate
     try {
@@ -132,6 +134,7 @@ export async function maybeLearn(prisma: any, modelId: string) {
           action: "regex_candidate",
           note: JSON.stringify({
             candidate,
+            actionType,
             sourceCases: messages,
             generatedAt: new Date().toISOString(),
             status: "pending_approval",

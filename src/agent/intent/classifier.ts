@@ -4,6 +4,154 @@ import type { Intent } from "./types";
 
 // ── L0: Regex patterns (bilingual: zh + en) ──
 
+export interface RegexRuleMeta {
+  id: string;
+  action: string;
+  lang: "zh" | "en" | "both";
+  pattern: string;   // display form with /delimiters/
+  source: string;    // bare regex for new RegExp(source, "i")
+  description: string;
+  examples: string[];
+}
+
+export const REGEX_RULES: RegexRuleMeta[] = [
+  {
+    id: "chat_both",
+    action: "chat",
+    lang: "both",
+    pattern: "/^(你好|hi|hello|hey|谢谢|...)[\\s!！。.~～,，]*$/i",
+    source: "^(你好|hi|hello|hey|谢谢|thank|thanks|再见|bye|早上好|晚上好|下午好|晚安|ok|好的|嗯|哦|啊|哈哈|嘿嘿)[\\s!！。.~～,，]*$",
+    description: "匹配纯打招呼/感谢/告别消息",
+    examples: ["你好", "hi", "谢谢", "bye"],
+  },
+  {
+    id: "rename_zh",
+    action: "rename",
+    lang: "zh",
+    pattern: "/(?:叫你|改名|名字改成|以后叫你?)(.+)/",
+    source: "(?:叫你|改名|名字改成|以后叫你?)(.+)",
+    description: "匹配「叫你XX」「改名叫XX」等改名指令",
+    examples: ["叫你小助理", "名字改成仓库管家"],
+  },
+  {
+    id: "rename_en",
+    action: "rename",
+    lang: "en",
+    pattern: "/(?:call\\s+(?:you|me|yourself)\\s+|rename\\s+(?:to\\s+)?|...)(.+)/i",
+    source: "(?:call\\s+(?:you|me|yourself)\\s+|rename\\s+(?:to\\s+)?|change\\s+(?:your\\s+)?name\\s+to\\s+)(.+)",
+    description: "匹配 'call you XX' / 'rename to XX' 等改名指令",
+    examples: ["call you Jarvis", "rename to StockBot"],
+  },
+  {
+    id: "consume_zh",
+    action: "consume",
+    lang: "zh",
+    pattern: "/吃完|喝了|用了|扔了|丢了|没了|消灭|干掉|...|消耗/",
+    source: "吃完|喝了|用了|扔了|丢了|没了|消灭|干掉|处理掉|吃完?了|喝完?了|用完?了|扔掉了|丢掉了|坏掉?了|过期|变质|发霉|取出|出库|消耗",
+    description: "匹配「吃了/喝了/用了/扔了/过期/出库」等消耗信号",
+    examples: ["吃了三瓶可乐", "牛奶喝完了", "电池过期了"],
+  },
+  {
+    id: "consume_en",
+    action: "consume",
+    lang: "en",
+    pattern: "/\\b(ate|drank|used|finished|threw|discarded|...)\\b/i",
+    source: "\\b(ate|drank|used|finished|threw|discarded|removed|consumed|took|got\\s*rid|thrown|tossed|finished\\s*off|used\\s*up|ran\\s*out)\\b",
+    description: "匹配 'ate/drank/used/finished/threw' 等消耗信号",
+    examples: ["ate 2 apples", "finished the milk"],
+  },
+  {
+    id: "stockin_zh",
+    action: "stockIn",
+    lang: "zh",
+    pattern: "/买了|入库|放进|收到|添加|新增|采购|进货/",
+    source: "买了|入库|放进|收到|添加|新增|采购|进货",
+    description: "匹配「买了/入库/放进/收到/采购」等入库信号",
+    examples: ["买了六瓶可乐", "新购入5斤大米", "收到快递"],
+  },
+  {
+    id: "stockin_en",
+    action: "stockIn",
+    lang: "en",
+    pattern: "/\\b(bought|purchased|got|received|added|stocked|put|placed)\\b/i",
+    source: "\\b(bought|purchased|got|received|added|stocked|put|placed)\\b",
+    description: "匹配 'bought/purchased/got/received' 等入库信号",
+    examples: ["bought 5 bottles of water", "got 3 packs of noodles"],
+  },
+  {
+    id: "move_zh",
+    action: "move",
+    lang: "zh",
+    pattern: "/搬到|移到|挪到|移动到|搬运|搬了|换位置|放错|.../",
+    source: "搬到|移到|挪到|移动到|搬运|搬了|换位置|放错|放错位置|位置不对|位置错了|放的位置|默认位置是什么|怎么在默认|帮我?移|帮我?搬|帮我?挪",
+    description: "匹配「搬到/移到/挪到/换位置」等移动信号",
+    examples: ["把电池搬到抽屉", "可乐移到冰箱"],
+  },
+  {
+    id: "move_en",
+    action: "move",
+    lang: "en",
+    pattern: "/\\b(moved|relocated|transferred|shifted|put\\s+\\w+\\s+(?:to|in|into))\\b/i",
+    source: "\\b(moved|relocated|transferred|shifted|put\\s+\\w+\\s+(?:to|in|into))\\b",
+    description: "匹配 'moved/relocated/transferred' 等移动信号",
+    examples: ["moved batteries to drawer", "put milk in fridge"],
+  },
+  {
+    id: "restructure_zh",
+    action: "restructure",
+    lang: "zh",
+    pattern: "/分品牌|拆分|分割|拆开|重组|分类|分一下|分开|分成/",
+    source: "分品牌|拆分|分割|拆开|重组|分类|分一下|分开|分成",
+    description: "匹配「分品牌/拆分/分割/重组」等拆分重组信号",
+    examples: ["把可乐分品牌", "拆分一下螺丝刀"],
+  },
+  {
+    id: "restructure_en",
+    action: "restructure",
+    lang: "en",
+    pattern: "/\\b(split|separate|break\\s*down|categorize|reorganize|by\\s+brand|...)\\b/i",
+    source: "\\b(split|separate|break\\s*down|categorize|reorganize|by\\s+brand|classify|divide)\\b",
+    description: "匹配 'split/separate/reorganize' 等拆分信号",
+    examples: ["split cola by brand", "categorize tools"],
+  },
+  {
+    id: "delete_zh",
+    action: "delete",
+    lang: "zh",
+    pattern: "/清空|删除|去掉|移除|清理掉/",
+    source: "清空|删除|去掉|移除|清理掉",
+    description: "匹配「清空/删除/去掉/移除」等删除信号",
+    examples: ["删除过期电池", "清空仓库"],
+  },
+  {
+    id: "delete_en",
+    action: "delete",
+    lang: "en",
+    pattern: "/\\b(delete|remove|clear|get\\s*rid\\s*of|wipe|empty)\\b/i",
+    source: "\\b(delete|remove|clear|get\\s*rid\\s*of|wipe|empty)\\b",
+    description: "匹配 'delete/remove/clear/wipe' 等删除信号",
+    examples: ["delete expired items", "remove old stock"],
+  },
+  {
+    id: "query_zh",
+    action: "query",
+    lang: "zh",
+    pattern: "/盘点|查看|看看|还有|库存|有什么|还剩|剩多少|有没有|在哪|放哪|.../",
+    source: "盘点|查看|看看|还有|库存|有什么|还剩|剩多少|有没有|在哪|放哪|位置|怎么|多少",
+    description: "匹配「盘点/查看/库存/还有/在哪」等查询信号",
+    examples: ["盘点一下", "可乐还有多少", "电池放哪了"],
+  },
+  {
+    id: "query_en",
+    action: "query",
+    lang: "en",
+    pattern: "/\\b(check|look|what|how\\s*many|how\\s*much|where|list|show|...)\\b/i",
+    source: "\\b(check|look|what|how\\s*many|how\\s*much|where|list|show|do\\s+(?:I|you|we)\\s+have|inventory|search)\\b",
+    description: "匹配 'check/look/what/how many/where/list' 等查询信号",
+    examples: ["check stock", "how many cokes do I have", "where are the batteries"],
+  },
+];
+
 const CHAT_ONLY = /^(你好|hi|hello|hey|谢谢|thank|thanks|再见|bye|早上好|晚上好|下午好|晚安|ok|好的|嗯|哦|啊|哈哈|嘿嘿)[\s!！。.~～,，]*$/i;
 const RENAME_ZH = /(?:叫你|改名|名字改成|以后叫你?)(.+)/;
 const RENAME_EN = /(?:call\s+(?:you|me|yourself)\s+|rename\s+(?:to\s+)?|change\s+(?:your\s+)?name\s+to\s+)(.+)/i;
@@ -72,7 +220,7 @@ function getSignals(msg: string) {
 // ── Keyword extraction ──
 
 const VERB_CLEANUP_ZH = /仓库|清空|清空仓库|全部清空|分成|分品牌|拆分|分割|拆开|重组|分类|分一下|分开|吃了|喝了|用了|扔了|丢了|吃完|喝完|用完|扔掉|丢掉|消灭|干掉|处理掉|坏掉|坏[了掉]|过期|变质|发霉|取出|出库|消耗|买了|入库|放进|放到|放在|放入|收到|添加|新增|采购|进货|搬到|移到|挪到|移动|搬运|删除|去掉|移除|清理掉|盘点|查看|看看|库存/g;
-const PARTICLE_ZH = /[的了把被刚才已经都还要想去来一下这个那个什么怎么还也会不操作搞做没][了吗呢吧啊呀]?/g;
+const PARTICLE_ZH = /[的了把被刚才已经都还要想去来一下这个那个什么怎么还也会不操作搞做没][了吗呢吧啊呀]/g; // require 2-char particle to avoid destroying keywords like 不锈钢→锈钢
 const PUNCT_ZH = /[\s,，。！!？?、：:；;…\-—]+/g;
 
 function extractKeywordZH(msg: string): string {
@@ -152,54 +300,38 @@ function splitClauses(msg: string): string[] | null {
 
 // ── L0: Regex classification ──
 
-function regexClassify(msg: string): Intent | null {
-  if (CHAT_ONLY.test(msg.trim())) return { type: "chat" };
+function regexClassify(msg: string, customRegexRules?: Array<{pattern: string; action: string}>): Intent | null {
+  // All rules come from StoreMeta (seeded from REGEX_RULES on first access)
+  if (!customRegexRules || customRegexRules.length === 0) return null;
 
-  const renameMatch = msg.match(RENAME_ZH) || msg.match(RENAME_EN);
-  if (renameMatch) return { type: "rename", newName: renameMatch[1].trim() };
-
-  const { CONSUME_SIGNAL, STOCKIN_SIGNAL, MOVE_SIGNAL, RESTRUCTURE_SIGNAL, DELETE_SIGNAL, QUERY_SIGNAL, en } = getSignals(msg);
-
-  const isConsume = CONSUME_SIGNAL.test(msg);
-  const isStockIn = STOCKIN_SIGNAL.test(msg);
-  const isMove = MOVE_SIGNAL.test(msg);
-  const isRestructure = RESTRUCTURE_SIGNAL.test(msg);
-  const isDelete = DELETE_SIGNAL.test(msg);
-  const isQuery = QUERY_SIGNAL.test(msg);
-
-  let keyword = en ? extractKeywordEN(msg) : extractKeywordZH(msg);
-  const qty = extractQty(msg);
-
-  // Downgrade to query if keyword is clearly not an item name
-  if (/^(你|我|怎么|什么|吗|呢|吧|啊|操作|不会|搞|没|这|那|you|how|what|why|when|who|can|will|please|just)/i.test(keyword) || keyword.length > 15) {
-    return { type: "query", keyword: "" };
+  for (const { pattern, action } of customRegexRules) {
+    try {
+      const re = new RegExp(pattern, "i");
+      if (re.test(msg)) {
+        console.log(`[Intent] Regex matched: ${pattern.slice(0, 60)} → ${action}`);
+        if (action === "chat") return { type: "chat" };
+        if (action === "rename") {
+          const m = msg.match(re);
+          return { type: "rename", newName: (m?.[1] || "").trim() };
+        }
+        if (action === "query") return { type: "query", keyword: extractKeywordZH(msg) || extractKeywordEN(msg) || undefined };
+        if (action === "restructure") return { type: "restructure", keyword: extractKeywordZH(msg) || extractKeywordEN(msg) || "" };
+        const qty = extractQty(msg);
+        const target = extractTarget(msg);
+        return {
+          type: "mutate",
+          action: action as "consume" | "stockIn" | "move" | "delete",
+          keyword: (isEnglish(msg) ? extractKeywordEN(msg) : extractKeywordZH(msg)) || msg,
+          qty,
+          target,
+        };
+      }
+    } catch {
+      // Invalid regex pattern, skip
+    }
   }
 
-  // Priority: consume > restructure > move > stockIn > delete > query
-  if (isConsume) {
-    return { type: "mutate", action: "consume", keyword: keyword || msg, qty };
-  }
-  if (isRestructure) {
-    return { type: "restructure", keyword: keyword || "可乐" };
-  }
-  if (isMove) {
-    const target = extractTarget(msg);
-    if (target) keyword = keyword.replace(new RegExp(target, "gi"), "").replace(/到$/g, "").trim();
-    return { type: "mutate", action: "move", keyword: keyword || msg, qty, target };
-  }
-  if (isStockIn) {
-    const target = extractTarget(msg);
-    if (target) keyword = keyword.replace(new RegExp(target, "gi"), "").replace(/到$/g, "").trim();
-    return { type: "mutate", action: "stockIn", keyword: keyword || msg, qty, target };
-  }
-  if (isDelete) {
-    return { type: "mutate", action: "delete", keyword: keyword || msg };
-  }
-  if (isQuery) {
-    return { type: "query", keyword: keyword || undefined };
-  }
-
-  return null;
+  return null; // No match → L1 fallback
 }
 
 // ── L1: generateText fallback ──
@@ -244,7 +376,8 @@ async function textClassify(msg: string, modelId: string): Promise<Intent> {
       case "query":
         return { type: "query", keyword: isEnglish(msg) ? extractKeywordEN(msg) : extractKeywordZH(msg) || undefined };
       case "rename":
-        return { type: "rename", newName: msg.replace(/[叫你改名名字改成以后]/g, "").replace(/(?:call\s+(?:you|me|yourself)\s+|rename\s+(?:to\s+)?|change\s+(?:your\s+)?name\s+to\s+)/i, "").trim() };
+        const rm = msg.match(RENAME_ZH) || msg.match(RENAME_EN);
+        return { type: "rename", newName: (rm?.[1] || msg).trim() };
       case "chat":
         return { type: "chat" };
       default:
@@ -259,18 +392,23 @@ async function textClassify(msg: string, modelId: string): Promise<Intent> {
 
 // ── Main entry: returns Intent[] ──
 
-export async function classifyIntent(userMessage: string, language: string, modelId: string): Promise<Intent[]> {
+export async function classifyIntent(
+  userMessage: string,
+  language: string,
+  modelId: string,
+  customRegexRules?: Array<{pattern: string; action: string}>
+): Promise<Intent[]> {
   const clauses = splitClauses(userMessage);
   if (clauses && clauses.length > 1) {
     console.log(`[Intent] Multi-clause: ${clauses.length} clauses`);
     return clauses.map((c, i) => {
-      const intent = regexClassify(c);
+      const intent = regexClassify(c, customRegexRules);
       console.log(`[Intent]   Clause ${i}: "${c.slice(0, 40)}" → ${intent?.type || "regex miss"}`);
       return intent || { type: "query" as const, keyword: c };
     });
   }
 
-  const regexResult = regexClassify(userMessage);
+  const regexResult = regexClassify(userMessage, customRegexRules);
   if (regexResult) {
     console.log(`[Intent] Regex → ${regexResult.type}${regexResult.type === "mutate" ? ` ${(regexResult as any).action} "${(regexResult as any).keyword}" qty=${(regexResult as any).qty}` : ""}`);
     return [regexResult];

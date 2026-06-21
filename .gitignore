@@ -45,3 +45,5 @@ next-env.d.ts
 
 /src/generated/prisma
 daiban.md
+.mimocode/plans/1782035012009-misty-nebula.md
+docs/compose/plans/2026-06-21-cloud-warehouse-fixes.md

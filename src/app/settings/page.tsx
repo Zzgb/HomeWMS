@@ -6,6 +6,7 @@ import { DEFAULT_MEMORY_SIZE } from "@/lib/constants";
 import { SYSTEM_PROMPT } from "@/lib/prompts";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -445,12 +446,12 @@ export default function SettingsPage() {
           setCloudConns((prev) => prev.map((c) => c.id === conn.id ? conn! : c));
         } else {
           // 连接失败，显示错误提示
-          alert(data.error || "数据库连接失败，请检查URL是否正确");
+          toast.error(data.error || "数据库连接失败，请检查URL是否正确");
           setConnectingDb(false);
-          return; // 不继续设置活跃状态
+          return;
         }
       } catch {
-        alert("连接失败，请检查网络或URL");
+        toast.error("连接失败，请检查网络或URL");
         setConnectingDb(false);
         return; // 不继续设置活跃状态
       } finally {
@@ -488,14 +489,13 @@ export default function SettingsPage() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         // 保存失败，显示错误提示
-        alert(data.error || "保存LLM配置失败，请检查数据库连接");
-        return; // 不清空表单
+        toast.error(data.error || "保存LLM配置失败，请检查数据库连接");
+        return;
       }
-      // 保存成功，清空表单
       setLlmFormId(null); setLlmFormModelId("deepseek-v4-flash"); setLlmFormKey(""); setLlmFormBaseURL(""); setLlmFormLabel("");
       await loadLlmConfigsForConn(connId!, sid);
     } catch {
-      alert("保存失败，请检查网络连接");
+      toast.error("保存失败，请检查网络连接");
     } finally {
       setSavingLLM(false);
     }

@@ -65,12 +65,13 @@ export default function ChatPage() {
         return res.json();
       })
       .then((data: Store[]) => {
-        // 合并云端连接到stores列表
+        // 合并云端连接到stores列表（去重：跳过已在API列表中的ID）
         if (deploymentMode !== "local") {
           const raw = localStorage.getItem("cloud_connections");
           const cloudConns: { id: string; label: string; storeId?: string }[] = raw ? JSON.parse(raw) : [];
+          const existingIds = new Set(data.map((s) => s.id));
           const cloudStores: Store[] = cloudConns
-            .filter((c) => c.storeId)
+            .filter((c) => c.storeId && !existingIds.has(c.storeId))
             .map((c) => ({ id: c.storeId!, name: c.label }));
           data = [...data, ...cloudStores];
         }

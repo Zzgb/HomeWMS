@@ -79,7 +79,7 @@ export const inventoryService = {
         update: {
           qty: { increment: qty },
           ...(expiry ? { expiryDate: expiry } : {}),
-          ...(status ? { status: effectiveStatus } : {}),
+          status: effectiveStatus,
         },
       });
 

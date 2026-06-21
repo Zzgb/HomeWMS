@@ -57,6 +57,7 @@ export default function ChatPage() {
   // Load stores and read activeStoreId from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("activeStoreId");
+    const deploymentMode = localStorage.getItem("deploymentMode") || "local";
 
     fetch("/api/stores")
       .then((res) => {
@@ -64,6 +65,15 @@ export default function ChatPage() {
         return res.json();
       })
       .then((data: Store[]) => {
+        // 合并云端连接到stores列表
+        if (deploymentMode !== "local") {
+          const raw = localStorage.getItem("cloud_connections");
+          const cloudConns: { id: string; label: string; storeId?: string }[] = raw ? JSON.parse(raw) : [];
+          const cloudStores: Store[] = cloudConns
+            .filter((c) => c.storeId)
+            .map((c) => ({ id: c.storeId!, name: c.label }));
+          data = [...data, ...cloudStores];
+        }
         setStores(data);
         // Validate saved storeId exists in loaded stores
         if (saved && data.some((s: Store) => s.id === saved)) {

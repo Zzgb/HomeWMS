@@ -216,28 +216,31 @@ export default function SettingsPage() {
   // Language tab state
   const [language, setLanguage] = useState("en");
 
-  // Load stores — local = API, cloud = localStorage
+  // Load stores — 始终从API加载，云端模式额外加载云端连接
   useEffect(() => {
     const savedLang = localStorage.getItem("language");
     if (savedLang) setLanguage(savedLang);
 
-    if (deploymentMode === "local") {
-      const saved = localStorage.getItem("activeStoreId");
-      fetch("/api/stores")
-        .then((res) => (res.ok ? res.json() : []))
-        .then((data: Store[]) => {
-          setStores(data);
+    // 始终加载本地仓库用于选择
+    const saved = localStorage.getItem("activeStoreId");
+    fetch("/api/stores")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: Store[]) => {
+        setStores(data);
+        if (deploymentMode === "local") {
           if (saved && data.some((s: Store) => s.id === saved)) {
             setStoreId(saved);
           } else if (saved) {
             localStorage.removeItem("activeStoreId");
             setStoreId(null);
           }
-          setLoadingStores(false);
-        })
-        .catch(() => setLoadingStores(false));
-    } else {
-      // Cloud mode: load from localStorage
+        }
+        setLoadingStores(false);
+      })
+      .catch(() => setLoadingStores(false));
+
+    // 云端模式下加载云端连接
+    if (deploymentMode !== "local") {
       try {
         const raw = localStorage.getItem("cloud_connections");
         const conns: CloudConnection[] = raw ? JSON.parse(raw) : [];
@@ -245,13 +248,22 @@ export default function SettingsPage() {
         const active = localStorage.getItem("activeCloudConnId");
         if (active && conns.some((c) => c.id === active)) {
           setActiveCloudConnId(active);
+          const activeConn = conns.find((c) => c.id === active);
+          if (activeConn?.storeId) {
+            setStoreId(activeConn.storeId);
+            loadLlmConfigsForConn(active, activeConn.storeId);
+          }
         } else if (conns.length > 0) {
           setActiveCloudConnId(conns[0].id);
+          localStorage.setItem("activeCloudConnId", conns[0].id);
+          if (conns[0].storeId) {
+            setStoreId(conns[0].storeId);
+            loadLlmConfigsForConn(conns[0].id, conns[0].storeId);
+          }
         }
       } catch {}
-      setLoadingStores(false);
     }
-  }, [deploymentMode]);
+  }, [deploymentMode, loadLlmConfigsForConn]);
 
   // Load config when storeId changes
   useEffect(() => {

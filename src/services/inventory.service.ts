@@ -76,7 +76,11 @@ export const inventoryService = {
           itemId_spotId: { itemId: item.id, spotId: spot.id },
         },
         create: { itemId: item.id, spotId: spot.id, qty, expiryDate: expiry, status: effectiveStatus },
-        update: { qty: { increment: qty } },
+        update: {
+          qty: { increment: qty },
+          ...(expiry ? { expiryDate: expiry } : {}),
+          ...(status ? { status: effectiveStatus } : {}),
+        },
       });
 
       // Create log

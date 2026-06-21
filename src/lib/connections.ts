@@ -56,6 +56,7 @@ export interface WarehouseListItem {
 // ── Client cache ──
 const clientCache = new Map<string, PrismaClient>();
 const schemaFixed = new Set<string>();
+const creating = new Set<string>();
 
 function buildUrl(cfg: WarehouseConfig, extraParams?: string): string {
   const encodedPassword = encodeURIComponent(cfg.password);
@@ -153,20 +154,25 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
     return clientCache.get(warehouseId)!;
   }
 
-  const warehouses = readWarehouses();
-
-  // Auto-bootstrap from DATABASE_URL if no warehouses configured
-  if (warehouses.size === 0) {
-    const bootCfg = bootstrapFromEnv();
-    if (bootCfg) {
-      warehouses.set(bootCfg.id, bootCfg);
-    }
+  if (creating.has(warehouseId)) {
+    return null;
   }
 
-  const cfg = warehouses.get(warehouseId);
-  if (!cfg) return null;
-
+  creating.add(warehouseId);
   try {
+    const warehouses = readWarehouses();
+
+    // Auto-bootstrap from DATABASE_URL if no warehouses configured
+    if (warehouses.size === 0) {
+      const bootCfg = bootstrapFromEnv();
+      if (bootCfg) {
+        warehouses.set(bootCfg.id, bootCfg);
+      }
+    }
+
+    const cfg = warehouses.get(warehouseId);
+    if (!cfg) return null;
+
     const url = buildUrl(cfg);
     const client = new PrismaClient({
       adapter: new PrismaPg({ connectionString: url }),
@@ -194,6 +200,8 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
   } catch (err: any) {
     console.error(`Failed to create PrismaClient for warehouse ${warehouseId}:`, err.message);
     return null;
+  } finally {
+    creating.delete(warehouseId);
   }
 }
 

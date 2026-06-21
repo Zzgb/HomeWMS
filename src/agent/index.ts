@@ -95,7 +95,7 @@ export async function runAgent(input: ChatInput) {
   // ── Layer 2-3: Execute each intent ──
   const allResults: ToolResult[] = [];
   let mergedResults: ToolResult[] = [];
-  let ctx: any;
+  let ctx: any = { finalMessages: [], conflicts: [], system: "" };
   let summaries: string[] = [];
 
   for (let i = 0; i < intents.length; i++) {

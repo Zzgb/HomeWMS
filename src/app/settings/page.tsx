@@ -427,8 +427,17 @@ export default function SettingsPage() {
         if (data.success) {
           conn = { ...conn, storeId: data.storeId };
           setCloudConns((prev) => prev.map((c) => c.id === conn.id ? conn! : c));
+        } else {
+          // 连接失败，显示错误提示
+          alert(data.error || "数据库连接失败，请检查URL是否正确");
+          setConnectingDb(false);
+          return; // 不继续设置活跃状态
         }
-      } catch {} finally {
+      } catch {
+        alert("连接失败，请检查网络或URL");
+        setConnectingDb(false);
+        return; // 不继续设置活跃状态
+      } finally {
         setConnectingDb(false);
       }
     }

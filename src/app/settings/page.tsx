@@ -251,19 +251,35 @@ export default function SettingsPage() {
           const activeConn = conns.find((c) => c.id === active);
           if (activeConn?.storeId) {
             setStoreId(activeConn.storeId);
-            loadLlmConfigsForConn(active, activeConn.storeId);
+            // 加载该连接的LLM配置
+            fetch(`/api/llm-config?storeId=${encodeURIComponent(activeConn.storeId)}`)
+              .then((res) => res.json())
+              .then((data) => {
+                if (Array.isArray(data)) {
+                  setConnLlmConfigs((prev) => ({ ...prev, [active]: data }));
+                }
+              })
+              .catch(() => {});
           }
         } else if (conns.length > 0) {
           setActiveCloudConnId(conns[0].id);
           localStorage.setItem("activeCloudConnId", conns[0].id);
           if (conns[0].storeId) {
             setStoreId(conns[0].storeId);
-            loadLlmConfigsForConn(conns[0].id, conns[0].storeId);
+            // 加载该连接的LLM配置
+            fetch(`/api/llm-config?storeId=${encodeURIComponent(conns[0].storeId)}`)
+              .then((res) => res.json())
+              .then((data) => {
+                if (Array.isArray(data)) {
+                  setConnLlmConfigs((prev) => ({ ...prev, [conns[0].id]: data }));
+                }
+              })
+              .catch(() => {});
           }
         }
       } catch {}
     }
-  }, [deploymentMode, loadLlmConfigsForConn]);
+  }, [deploymentMode]);
 
   // Load config when storeId changes
   useEffect(() => {

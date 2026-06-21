@@ -457,7 +457,7 @@ export default function SettingsPage() {
     if (!sid || !llmFormProvider || !llmFormKey.trim()) return;
     setSavingLLM(true);
     try {
-      await fetch(`/api/llm-config?storeId=${encodeURIComponent(sid)}`, {
+      const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(sid)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -469,9 +469,18 @@ export default function SettingsPage() {
           label: llmFormLabel || undefined,
         }),
       });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        // 保存失败，显示错误提示
+        alert(data.error || "保存LLM配置失败，请检查数据库连接");
+        return; // 不清空表单
+      }
+      // 保存成功，清空表单
       setLlmFormId(null); setLlmFormModelId("deepseek-v4-flash"); setLlmFormKey(""); setLlmFormBaseURL(""); setLlmFormLabel("");
       await loadLlmConfigsForConn(connId!, sid);
-    } catch {} finally {
+    } catch {
+      alert("保存失败，请检查网络连接");
+    } finally {
       setSavingLLM(false);
     }
   }, [expandedConnId, cloudConns, llmFormId, llmFormProvider, llmFormModelId, llmFormKey, llmFormBaseURL, llmFormLabel, loadLlmConfigsForConn]);

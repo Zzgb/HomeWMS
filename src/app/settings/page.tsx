@@ -166,12 +166,15 @@ export default function SettingsPage() {
   const [regexExpanded, setRegexExpanded] = useState(false);
   const [customRegexRules, setCustomRegexRules] = useState<any[]>([]);
   const [savingRules, setSavingRules] = useState(false);
-  const [deploymentMode, setDeploymentMode] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("deploymentMode") || "local";
-    }
-    return "local";
-  });
+  const [deploymentMode, setDeploymentMode] = useState("local");
+  const [deploymentReady, setDeploymentReady] = useState(false);
+
+  // 从 localStorage 读取部署模式（避免 SSR hydration 不匹配）
+  useEffect(() => {
+    const saved = localStorage.getItem("deploymentMode");
+    if (saved) setDeploymentMode(saved);
+    setDeploymentReady(true);
+  }, []);
 
   // Cloud mode state
   type CloudConnection = { id: string; label: string; url: string; storeId?: string; createdAt: string };
@@ -422,12 +425,17 @@ export default function SettingsPage() {
         };
         const updated = [...cloudConns, newConn];
         saveCloudConns(updated);
-        setActiveCloudConnId(newConn.id);
-        localStorage.setItem("activeCloudConnId", newConn.id);
+        // 将新连接的仓库加入选择列表（去重）
         if (data.storeId) {
+          setStores((prev) => {
+            if (prev.some((s) => s.id === data.storeId)) return prev;
+            return [...prev, { id: data.storeId!, name: newConn.label }];
+          });
           setStoreId(data.storeId);
           await loadLlmConfigsForConn(newConn.id, data.storeId);
         }
+        setActiveCloudConnId(newConn.id);
+        localStorage.setItem("activeCloudConnId", newConn.id);
         setNewConnUrl("");
         setExpandedConnId(newConn.id);
       } else {
@@ -483,6 +491,11 @@ export default function SettingsPage() {
     setActiveCloudConnId(conn.id);
     localStorage.setItem("activeCloudConnId", conn.id);
     if (conn.storeId) {
+      // 确保该连接对应的仓库在选择列表中
+      setStores((prev) => {
+        if (prev.some((s) => s.id === conn.storeId)) return prev;
+        return [...prev, { id: conn.storeId!, name: conn.label }];
+      });
       setStoreId(conn.storeId);
       loadLlmConfigsForConn(conn.id, conn.storeId);
     }

@@ -182,6 +182,8 @@ export default function SettingsPage() {
   const [cloudConns, setCloudConns] = useState<CloudConnection[]>([]);
   const [expandedConnId, setExpandedConnId] = useState<string | null>(null);
   const [activeCloudConnId, setActiveCloudConnId] = useState<string | null>(null);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editLabelValue, setEditLabelValue] = useState("");
   // Per-connection LLM configs: { [connId]: LlmConfigItem[] }
   const [connLlmConfigs, setConnLlmConfigs] = useState<Record<string, LlmConfigItem[]>>({});
   // LLM form state (for the currently expanded connection)
@@ -240,30 +242,37 @@ export default function SettingsPage() {
 
     // 始终加载本地仓库用于选择
     const saved = localStorage.getItem("activeStoreId");
-    fetch("/api/stores")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data: Store[]) => {
-        // 云端模式下合并云端连接的仓库到选择列表
-        if (deploymentMode !== "local") {
-          const raw = localStorage.getItem("cloud_connections");
-          const cloudConns: CloudConnection[] = raw ? JSON.parse(raw) : [];
-          const existingIds = new Set(data.map((s) => s.id));
-          const cloudStores: Store[] = cloudConns
-            .filter((c) => c.storeId && !existingIds.has(c.storeId))
-            .map((c) => ({ id: c.storeId!, name: c.label }));
-          data = [...data, ...cloudStores];
-        }
-        setStores(data);
-        // 恢复保存的仓库选择（所有部署模式）
-        if (saved && data.some((s: Store) => s.id === saved)) {
-          setStoreId(saved);
-        } else if (saved) {
-          localStorage.removeItem("activeStoreId");
-          setStoreId(null);
-        }
-        setLoadingStores(false);
-      })
-      .catch(() => setLoadingStores(false));
+
+    // 云端模式：只加载云端连接的仓库，不读本地 warehouses.json
+    if (deploymentMode !== "local") {
+      const raw = localStorage.getItem("cloud_connections");
+      const conns: CloudConnection[] = raw ? JSON.parse(raw) : [];
+      const cloudStores: Store[] = conns
+        .filter((c) => c.storeId)
+        .map((c) => ({ id: c.storeId!, name: c.label }));
+      setStores(cloudStores);
+      if (saved && cloudStores.some((s) => s.id === saved)) {
+        setStoreId(saved);
+      } else if (saved) {
+        localStorage.removeItem("activeStoreId");
+        setStoreId(null);
+      }
+      setLoadingStores(false);
+    } else {
+      fetch("/api/stores")
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data: Store[]) => {
+          setStores(data);
+          if (saved && data.some((s: Store) => s.id === saved)) {
+            setStoreId(saved);
+          } else if (saved) {
+            localStorage.removeItem("activeStoreId");
+            setStoreId(null);
+          }
+          setLoadingStores(false);
+        })
+        .catch(() => setLoadingStores(false));
+    }
 
     // 云端模式下加载云端连接
     if (deploymentMode !== "local") {
@@ -459,6 +468,21 @@ export default function SettingsPage() {
       if (next?.storeId) setStoreId(next.storeId);
     }
   }, [cloudConns, expandedConnId, activeCloudConnId]);
+
+  const handleUpdateConnLabel = useCallback((id: string, newLabel: string) => {
+    if (!newLabel.trim()) return;
+    setCloudConns((prev) => {
+      const updated = prev.map((c) => c.id === id ? { ...c, label: newLabel.trim() } : c);
+      localStorage.setItem("cloud_connections", JSON.stringify(updated));
+      return updated;
+    });
+    // 同步更新 stores 下拉列表
+    setStores((prev) => prev.map((s) => {
+      const conn = cloudConns.find((c) => c.id === id);
+      return conn && s.id === conn.storeId ? { ...s, name: newLabel.trim() } : s;
+    }));
+    setEditingLabelId(null);
+  }, [cloudConns]);
 
   const handleActivateConn = useCallback(async (conn: CloudConnection) => {
     if (!conn.storeId) {
@@ -1022,7 +1046,23 @@ export default function SettingsPage() {
                       <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpandedConnId(isExpanded ? null : conn.id)}>
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-xs">{isExpanded ? "▾" : "▸"}</span>
-                          <span className="text-sm font-medium truncate">{conn.label}</span>
+                          {editingLabelId === conn.id ? (
+                            <input
+                              className="text-sm font-medium bg-background border border-primary/30 rounded px-1.5 py-0.5 w-28 focus:outline-none focus:border-primary"
+                              value={editLabelValue}
+                              onChange={(e) => setEditLabelValue(e.target.value)}
+                              onBlur={() => handleUpdateConnLabel(conn.id, editLabelValue)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleUpdateConnLabel(conn.id, editLabelValue); if (e.key === "Escape") setEditingLabelId(null); }}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <span
+                              className="text-sm font-medium truncate cursor-text hover:text-primary/80"
+                              onDoubleClick={(e) => { e.stopPropagation(); setEditingLabelId(conn.id); setEditLabelValue(conn.label); }}
+                              title="双击编辑名称"
+                            >{conn.label}</span>
+                          )}
                           {isActive && <Badge className="text-xs bg-primary/20 text-primary border-primary/30">活跃</Badge>}
                           <code className="text-xs text-muted-foreground truncate hidden sm:inline">{conn.url.slice(0, 50)}...</code>
                         </div>

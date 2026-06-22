@@ -59,37 +59,42 @@ export default function ChatPage() {
     const saved = localStorage.getItem("activeStoreId");
     const deploymentMode = localStorage.getItem("deploymentMode") || "local";
 
-    fetch("/api/stores")
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch stores");
-        return res.json();
-      })
-      .then((data: Store[]) => {
-        // 合并云端连接到stores列表（去重：跳过已在API列表中的ID）
-        if (deploymentMode !== "local") {
-          const raw = localStorage.getItem("cloud_connections");
-          const cloudConns: { id: string; label: string; storeId?: string }[] = raw ? JSON.parse(raw) : [];
-          const existingIds = new Set(data.map((s) => s.id));
-          const cloudStores: Store[] = cloudConns
-            .filter((c) => c.storeId && !existingIds.has(c.storeId))
-            .map((c) => ({ id: c.storeId!, name: c.label }));
-          data = [...data, ...cloudStores];
-        }
-        setStores(data);
-        // Validate saved storeId exists in loaded stores
-        if (saved && data.some((s: Store) => s.id === saved)) {
-          setStoreId(saved);
-        } else if (saved) {
-          // Stale ID — clear it so the selector appears
-          localStorage.removeItem("activeStoreId");
-          setStoreId(null);
-        }
-        setLoadingStores(false);
-      })
-      .catch((err) => {
-        setStoreError(err.message);
-        setLoadingStores(false);
-      });
+    // 云端模式：只加载云端连接的仓库，不读本地 warehouses.json
+    if (deploymentMode !== "local") {
+      const raw = localStorage.getItem("cloud_connections");
+      const conns: { id: string; label: string; storeId?: string }[] = raw ? JSON.parse(raw) : [];
+      const cloudStores: Store[] = conns
+        .filter((c) => c.storeId)
+        .map((c) => ({ id: c.storeId!, name: c.label }));
+      setStores(cloudStores);
+      if (saved && cloudStores.some((s: Store) => s.id === saved)) {
+        setStoreId(saved);
+      } else if (saved) {
+        localStorage.removeItem("activeStoreId");
+        setStoreId(null);
+      }
+      setLoadingStores(false);
+    } else {
+      fetch("/api/stores")
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch stores");
+          return res.json();
+        })
+        .then((data: Store[]) => {
+          setStores(data);
+          if (saved && data.some((s: Store) => s.id === saved)) {
+            setStoreId(saved);
+          } else if (saved) {
+            localStorage.removeItem("activeStoreId");
+            setStoreId(null);
+          }
+          setLoadingStores(false);
+        })
+        .catch((err) => {
+          setStoreError(err.message);
+          setLoadingStores(false);
+        });
+    }
   }, []);
 
   const [lang] = useState(() => {

@@ -496,6 +496,9 @@ export async function registerFromUrl(urlString: string): Promise<{ success: boo
       createdAt: new Date().toISOString(),
     } as WarehouseConfig);
 
+    // Persist to warehouses.json so config survives HMR / server restart
+    writeWarehouses(warehouses);
+
     return { success: true, id };
   } catch (e: any) {
     return { success: false, error: e.message || String(e) };

@@ -6,14 +6,22 @@ import { DEFAULT_MEMORY_SIZE, DEFAULT_MODEL } from "@/lib/constants";
 
 export async function POST(req: Request) {
   try {
-    const { messages, storeId, language } = await req.json();
+    const { messages, storeId, language, dbUrl } = await req.json();
 
     if (!storeId) {
       return Response.json({ error: "storeId is required" }, { status: 400 });
     }
 
     // ── Connect ──
-    const prisma = getPrisma(storeId);
+    let prisma = getPrisma(storeId);
+    // 云端模式：缓存未命中时用客户端传来的 dbUrl 即时建连接
+    if (!prisma && dbUrl) {
+      const { registerFromUrl } = await import("@/lib/connections");
+      const result = await registerFromUrl(dbUrl);
+      if (result.success) {
+        prisma = getPrisma(storeId);
+      }
+    }
     if (!prisma) {
       return Response.json(
         { error: `仓库 "${storeId}" 连接失败。请去设置→仓库管理检查连接是否正常。` },

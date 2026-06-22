@@ -441,6 +441,7 @@ export default function SettingsPage() {
             return [...prev, { id: data.storeId!, name: newConn.label }];
           });
           setStoreId(data.storeId);
+          localStorage.setItem("activeStoreId", data.storeId);
           await loadLlmConfigsForConn(newConn.id, data.storeId);
         }
         setActiveCloudConnId(newConn.id);

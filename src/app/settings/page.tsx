@@ -138,6 +138,19 @@ const TASK_TYPE_KEYS: Record<string, string> = {
 
 export default function SettingsPage() {
   const { t } = useT();
+
+  // 将原始数据库连接错误映射为对用户友好的翻译文本
+  const translateDbError = (rawError: string): string => {
+    const e = rawError.toLowerCase();
+    if (e.includes("timeout") || e.includes("timed out") || e.includes("etimedout")) return t("conn.error.timeout");
+    if (e.includes("econnrefused") || e.includes("refused")) return t("conn.error.refused");
+    if (e.includes("enotfound") || e.includes("getaddrinfo") || e.includes("resolve")) return t("conn.error.host");
+    if (e.includes("authentication failed") || e.includes("password") || e.includes("auth")) return t("conn.error.auth");
+    if (e.includes("does not exist") || e.includes("database") && e.includes("not")) return t("conn.error.db");
+    if (e.includes("tls") || e.includes("ssl") || e.includes("certificate")) return t("conn.error.tls");
+    return rawError; // 无法识别则返回原始错误
+  };
+
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
   const [loadingStores, setLoadingStores] = useState(true);
@@ -418,10 +431,10 @@ export default function SettingsPage() {
         setNewConnUrl("");
         setExpandedConnId(newConn.id);
       } else {
-        toast.error(data.error || "连接失败");
+        toast.error(translateDbError(data.error) || t("conn.error.unknown"));
       }
     } catch {
-      toast.error("连接失败");
+      toast.error(t("conn.error.unknown"));
     } finally {
       setConnectingDb(false);
     }
@@ -455,12 +468,12 @@ export default function SettingsPage() {
           setCloudConns((prev) => prev.map((c) => c.id === conn.id ? conn! : c));
         } else {
           // 连接失败，显示错误提示
-          toast.error(data.error || "数据库连接失败，请检查URL是否正确");
+          toast.error(translateDbError(data.error) || t("conn.error.unknown"));
           setConnectingDb(false);
           return;
         }
       } catch {
-        toast.error("连接失败，请检查网络或URL");
+        toast.error(t("conn.error.unknown"));
         setConnectingDb(false);
         return; // 不继续设置活跃状态
       } finally {

@@ -274,7 +274,7 @@ export default function SettingsPage() {
         .catch(() => setLoadingStores(false));
     }
 
-    // 云端模式下加载云端连接
+    // 云端模式下加载云端连接（不覆盖第一 block 已恢复的 storeId）
     if (deploymentMode !== "local") {
       try {
         const raw = localStorage.getItem("cloud_connections");
@@ -285,31 +285,13 @@ export default function SettingsPage() {
           setActiveCloudConnId(active);
           const activeConn = conns.find((c) => c.id === active);
           if (activeConn?.storeId) {
-            setStoreId(activeConn.storeId);
-            // 加载该连接的LLM配置
-            fetch(`/api/llm-config?storeId=${encodeURIComponent(activeConn.storeId)}`)
-              .then((res) => res.json())
-              .then((data) => {
-                if (Array.isArray(data)) {
-                  setConnLlmConfigs((prev) => ({ ...prev, [active]: data }));
-                }
-              })
-              .catch(() => {});
+            loadLlmConfigsForConn(active, activeConn.storeId);
           }
         } else if (conns.length > 0) {
           setActiveCloudConnId(conns[0].id);
           localStorage.setItem("activeCloudConnId", conns[0].id);
           if (conns[0].storeId) {
-            setStoreId(conns[0].storeId);
-            // 加载该连接的LLM配置
-            fetch(`/api/llm-config?storeId=${encodeURIComponent(conns[0].storeId)}`)
-              .then((res) => res.json())
-              .then((data) => {
-                if (Array.isArray(data)) {
-                  setConnLlmConfigs((prev) => ({ ...prev, [conns[0].id]: data }));
-                }
-              })
-              .catch(() => {});
+            loadLlmConfigsForConn(conns[0].id, conns[0].storeId);
           }
         }
       } catch {}
@@ -522,6 +504,7 @@ export default function SettingsPage() {
         return [...prev, { id: conn.storeId!, name: conn.label }];
       });
       setStoreId(conn.storeId);
+      localStorage.setItem("activeStoreId", conn.storeId);
       loadLlmConfigsForConn(conn.id, conn.storeId);
     }
   }, [loadLlmConfigsForConn]);
@@ -579,6 +562,15 @@ export default function SettingsPage() {
       body: JSON.stringify({ deploymentMode }),
     });
   }, [storeId, deploymentMode]);
+
+  const handleEditLLM = useCallback((config: LlmConfigItem) => {
+    setLlmFormId(config.id);
+    setLlmFormProvider(config.provider);
+    setLlmFormModelId(config.modelId);
+    setLlmFormKey(config.apiKey);
+    setLlmFormBaseURL(config.baseURL || "");
+    setLlmFormLabel(config.label || "");
+  }, []);
 
   const handleSaveActiveConfig = useCallback(async (configId: string) => {
     const conn = cloudConns.find((c) => c.id === expandedConnId);
@@ -1064,6 +1056,7 @@ export default function SettingsPage() {
                               title="双击编辑名称"
                             >{conn.label}</span>
                           )}
+                          <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); setEditingLabelId(conn.id); setEditLabelValue(conn.label); }} title="编辑名称"><span className="text-xs">✎</span></Button>
                           {isActive && <Badge className="text-xs bg-primary/20 text-primary border-primary/30">活跃</Badge>}
                           <code className="text-xs text-muted-foreground truncate hidden sm:inline">{conn.url.slice(0, 50)}...</code>
                         </div>
@@ -1081,11 +1074,12 @@ export default function SettingsPage() {
                           {configs.length > 0 && (
                             <div className="space-y-1">
                               {configs.map((c) => (
-                                <div key={c.id} className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer text-xs ${false ? "bg-primary/10 border border-primary/30" : "bg-muted/30 border border-transparent hover:bg-muted/50"}`} onClick={() => handleSaveActiveConfig(c.id)}>
+                                <div key={c.id} className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-pointer text-xs ${llmFormId === c.id ? "bg-primary/10 border border-primary/30" : "bg-muted/30 border border-transparent hover:bg-muted/50"}`} onClick={() => handleEditLLM(c)}>
                                   <Badge variant="outline" className="font-mono text-xs">{c.provider}</Badge>
                                   <span className="font-medium">{c.modelId || c.provider}</span>
                                   {c.label && <span className="text-muted-foreground">{c.label}</span>}
                                   <code className="text-muted-foreground ml-auto mr-2">{c.apiKey.slice(0, 12)}...</code>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); handleSaveActiveConfig(c.id); }} title="设为活跃"><span className="text-xs">✓</span></Button>
                                   <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); handleDeleteLLM(c.id); }}><span className="text-xs">✕</span></Button>
                                 </div>
                               ))}

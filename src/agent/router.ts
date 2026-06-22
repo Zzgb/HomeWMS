@@ -27,8 +27,11 @@ export function getLLMKey(provider: string): string | undefined {
 }
 
 function resolveKey(provider: string, envKey: string | undefined): string {
-  const override = _keyOverrides?.[provider];
-  return override?.apiKey || envKey || "";
+  // null = 本地模式用 env key；非 null（含 {}）= 云模式只用 override，不回退 env
+  if (_keyOverrides !== null) {
+    return _keyOverrides[provider]?.apiKey || "";
+  }
+  return envKey || "";
 }
 
 function resolveBaseURL(provider: string, defaultURL?: string): string | undefined {

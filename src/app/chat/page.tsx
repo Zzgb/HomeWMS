@@ -102,20 +102,23 @@ export default function ChatPage() {
     return "zh";
   });
 
-  const dbUrl = useMemo(() => {
-    if (!storeId) return undefined;
+  const cloudConnMeta = useMemo(() => {
+    if (!storeId) return {};
     const raw = localStorage.getItem("cloud_connections");
-    if (!raw) return undefined;
+    if (!raw) return {};
     try {
       const conns = JSON.parse(raw);
       const conn = conns.find((c: any) => c.storeId === storeId);
-      return conn?.url || undefined;
-    } catch { return undefined; }
+      return { dbUrl: conn?.url || undefined, warehouseName: conn?.label || undefined };
+    } catch { return {}; }
   }, [storeId]);
 
   const chatTransport = useMemo(
-    () => storeId ? new DefaultChatTransport({ api: "/api/chat", body: { storeId, language: lang, dbUrl } }) : undefined,
-    [storeId, lang, dbUrl]
+    () => storeId ? new DefaultChatTransport({
+      api: "/api/chat",
+      body: { storeId, language: lang, dbUrl: cloudConnMeta.dbUrl, warehouseName: cloudConnMeta.warehouseName },
+    }) : undefined,
+    [storeId, lang, cloudConnMeta]
   );
 
   const {

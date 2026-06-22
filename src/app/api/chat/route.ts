@@ -6,7 +6,7 @@ import { DEFAULT_MEMORY_SIZE, DEFAULT_MODEL } from "@/lib/constants";
 
 export async function POST(req: Request) {
   try {
-    const { messages, storeId, language, dbUrl } = await req.json();
+    const { messages, storeId, language, dbUrl, warehouseName: clientWarehouseName } = await req.json();
 
     if (!storeId) {
       return Response.json({ error: "storeId is required" }, { status: 400 });
@@ -53,15 +53,19 @@ export async function POST(req: Request) {
           const map: Record<string, { apiKey: string; baseURL?: string }> = {};
           for (const c of configs) map[c.provider] = { apiKey: c.apiKey, baseURL: c.baseURL || undefined };
           setLLMKeyOverrides(map);
-          // Use the active LLM config's modelId
           const meta = await loadStoreMeta(prisma);
           const activeId = meta.activeLlmConfigId;
           if (activeId) {
             const active = configs.find((c) => c.id === activeId);
             if (active) activeModelId = `${active.provider}/${active.modelId}`;
           }
+        } else {
+          // 云端模式无 LLM 配置：显式设空避免回退到 .env key
+          setLLMKeyOverrides({});
         }
-      } catch {}
+      } catch {
+        setLLMKeyOverrides({});
+      }
     }
     let aiName = "小鞠";
     try {
@@ -104,7 +108,7 @@ export async function POST(req: Request) {
       modelId: activeModelId,
       userMessage: userText,
       language: language || "zh",
-      warehouseName: cfg?.name || storeId,
+      warehouseName: clientWarehouseName || cfg?.name || storeId,
       aiName,
       memorySize,
       contextMode: contextMode as "recent" | "summary" | "hybrid",

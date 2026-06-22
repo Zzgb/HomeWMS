@@ -111,7 +111,7 @@ export async function testConnection(
     user,
     password,
     database,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 10000,
   });
   try {
     const client = await pool.connect();
@@ -452,7 +452,7 @@ export async function registerFromUrl(urlString: string): Promise<{ success: boo
       user,
       password,
       database,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000,
       ssl: { rejectUnauthorized: false },
     });
     try {

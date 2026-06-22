@@ -904,11 +904,17 @@ export default function SettingsPage() {
           <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
             <AlertCircle className="h-8 w-8 text-destructive/60" />
             <p className="text-sm font-medium text-destructive/80">
-              {stores.length === 0 ? "未找到仓库，请在仓库管理中添加" : "请先选择一个仓库"}
+              {stores.length === 0
+                ? deploymentMode === "local"
+                  ? "未找到仓库，请在仓库管理中添加"
+                  : "未找到仓库，请添加云端数据库连接"
+                : "请先选择一个仓库"}
             </p>
             {stores.length === 0 && (
               <p className="text-xs text-center max-w-md">
-                本地模式：在仓库管理 tab 中添加本地或远程 PostgreSQL +  「本地」部署模式下需在仓库 tab 添加连接
+                {deploymentMode === "local"
+                  ? "在「仓库管理」tab 中添加本地或远程 PostgreSQL 连接"
+                  : "在「云端连接」卡片中输入 PostgreSQL 连接地址，验证通过后即可选择仓库"}
               </p>
             )}
           </CardContent>

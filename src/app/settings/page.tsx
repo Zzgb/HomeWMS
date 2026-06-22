@@ -1026,7 +1026,6 @@ export default function SettingsPage() {
               {/* Cloud connection list */}
               {cloudConns.map((conn) => {
                 const isExpanded = expandedConnId === conn.id;
-                const isActive = activeCloudConnId === conn.id;
                 const configs = connLlmConfigs[conn.id] || [];
                 const providerModels: Record<string, string[]> = {
                   deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
@@ -1036,7 +1035,7 @@ export default function SettingsPage() {
                   openrouter: [],
                 };
                 return (
-                  <Card key={conn.id} className={`bg-background/60 backdrop-blur-md border-border/50 ${isActive ? "ring-1 ring-primary/50" : ""}`}>
+                  <Card key={conn.id} className="bg-background/60 backdrop-blur-md border-border/50">
                     <CardContent className="pt-4 pb-3 space-y-2">
                       <div className="flex items-center justify-between cursor-pointer" onClick={() => setExpandedConnId(isExpanded ? null : conn.id)}>
                         <div className="flex items-center gap-2 min-w-0">
@@ -1059,13 +1058,9 @@ export default function SettingsPage() {
                             >{conn.label}</span>
                           )}
                           <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); setEditingLabelId(conn.id); setEditLabelValue(conn.label); }} title="编辑名称"><span className="text-xs">✎</span></Button>
-                          {isActive && <Badge className="text-xs bg-primary/20 text-primary border-primary/30">活跃</Badge>}
                           <code className="text-xs text-muted-foreground truncate hidden sm:inline">{conn.url.slice(0, 50)}...</code>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          {!isActive && (
-                            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={(e) => { e.stopPropagation(); handleActivateConn(conn); }}>设为活跃</Button>
-                          )}
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleDeleteCloudConn(conn.id); }}><span className="text-xs">✕</span></Button>
                         </div>
                       </div>

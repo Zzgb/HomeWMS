@@ -227,14 +227,23 @@ export default function SettingsPage() {
     fetch("/api/stores")
       .then((res) => (res.ok ? res.json() : []))
       .then((data: Store[]) => {
+        // 云端模式下合并云端连接的仓库到选择列表
+        if (deploymentMode !== "local") {
+          const raw = localStorage.getItem("cloud_connections");
+          const cloudConns: CloudConnection[] = raw ? JSON.parse(raw) : [];
+          const existingIds = new Set(data.map((s) => s.id));
+          const cloudStores: Store[] = cloudConns
+            .filter((c) => c.storeId && !existingIds.has(c.storeId))
+            .map((c) => ({ id: c.storeId!, name: c.label }));
+          data = [...data, ...cloudStores];
+        }
         setStores(data);
-        if (deploymentMode === "local") {
-          if (saved && data.some((s: Store) => s.id === saved)) {
-            setStoreId(saved);
-          } else if (saved) {
-            localStorage.removeItem("activeStoreId");
-            setStoreId(null);
-          }
+        // 恢复保存的仓库选择（所有部署模式）
+        if (saved && data.some((s: Store) => s.id === saved)) {
+          setStoreId(saved);
+        } else if (saved) {
+          localStorage.removeItem("activeStoreId");
+          setStoreId(null);
         }
         setLoadingStores(false);
       })
@@ -409,10 +418,10 @@ export default function SettingsPage() {
         setNewConnUrl("");
         setExpandedConnId(newConn.id);
       } else {
-        alert(data.error || "连接失败");
+        toast.error(data.error || "连接失败");
       }
     } catch {
-      alert("连接失败");
+      toast.error("连接失败");
     } finally {
       setConnectingDb(false);
     }

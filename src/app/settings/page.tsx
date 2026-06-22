@@ -274,27 +274,38 @@ export default function SettingsPage() {
         .catch(() => setLoadingStores(false));
     }
 
-    // 云端模式下加载云端连接（不覆盖第一 block 已恢复的 storeId）
+    // 云端模式下加载云端连接，失效连接自动清理
     if (deploymentMode !== "local") {
-      try {
-        const raw = localStorage.getItem("cloud_connections");
-        const conns: CloudConnection[] = raw ? JSON.parse(raw) : [];
-        setCloudConns(conns);
-        const active = localStorage.getItem("activeCloudConnId");
-        if (active && conns.some((c) => c.id === active)) {
-          setActiveCloudConnId(active);
-          const activeConn = conns.find((c) => c.id === active);
-          if (activeConn?.storeId) {
-            loadLlmConfigsForConn(active, activeConn.storeId);
+      const raw = localStorage.getItem("cloud_connections");
+      const conns: CloudConnection[] = raw ? JSON.parse(raw) : [];
+      const validConns: CloudConnection[] = [];
+      // 异步验证每个连接是否仍有效
+      Promise.all(conns.map(async (c) => {
+        if (!c.storeId) return;
+        try {
+          const res = await fetch(`/api/llm-config?storeId=${encodeURIComponent(c.storeId)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data)) setConnLlmConfigs((prev) => ({ ...prev, [c.id]: data }));
+            validConns.push(c);
           }
-        } else if (conns.length > 0) {
-          setActiveCloudConnId(conns[0].id);
-          localStorage.setItem("activeCloudConnId", conns[0].id);
-          if (conns[0].storeId) {
-            loadLlmConfigsForConn(conns[0].id, conns[0].storeId);
-          }
+        } catch {}
+      })).then(() => {
+        if (validConns.length < conns.length) {
+          // 有失效连接，更新 localStorage
+          localStorage.setItem("cloud_connections", JSON.stringify(validConns));
+          // 同步更新 stores（删除失效仓库）
+          setStores((prev) => prev.filter((s) => validConns.some((vc) => vc.storeId === s.id)));
         }
-      } catch {}
+        setCloudConns(validConns);
+        const active = localStorage.getItem("activeCloudConnId");
+        if (active && validConns.some((c) => c.id === active)) {
+          setActiveCloudConnId(active);
+        } else if (validConns.length > 0) {
+          setActiveCloudConnId(validConns[0].id);
+          localStorage.setItem("activeCloudConnId", validConns[0].id);
+        }
+      });
     }
   }, [deploymentMode]);
 

@@ -173,7 +173,10 @@ export function getWarehouseClient(warehouseId: string): PrismaClient | null {
     const cfg = warehouses.get(warehouseId);
     if (!cfg) return null;
 
-    const url = buildUrl(cfg);
+    // 云端部署强制 SSL（Neon 等云数据库必需）
+    const url = cfg.deploymentMode && cfg.deploymentMode !== "local"
+      ? buildSecureUrl(cfg)
+      : buildUrl(cfg);
     const client = new PrismaClient({
       adapter: new PrismaPg({ connectionString: url }),
     });

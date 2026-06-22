@@ -482,15 +482,17 @@ export default function SettingsPage() {
           conn = { ...conn, storeId: data.storeId };
           setCloudConns((prev) => prev.map((c) => c.id === conn.id ? conn! : c));
         } else {
-          // 连接失败，显示错误提示
+          // 连接失败，清理失效配置
           toast.error(translateDbError(data.error) || t("conn.error.unknown"));
+          handleDeleteCloudConn(conn.id);
           setConnectingDb(false);
           return;
         }
       } catch {
         toast.error(t("conn.error.unknown"));
+        handleDeleteCloudConn(conn.id);
         setConnectingDb(false);
-        return; // 不继续设置活跃状态
+        return;
       } finally {
         setConnectingDb(false);
       }

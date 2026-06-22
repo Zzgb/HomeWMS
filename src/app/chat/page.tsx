@@ -133,27 +133,29 @@ export default function ChatPage() {
     transport: chatTransport,
   });
 
-  // Load chat history when storeId changes
+  // Load chat history when storeId changes (delay to let useChat finish init)
   useEffect(() => {
     if (!storeId) return;
-    fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=200`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.messages) {
-          setMessages(data.messages.map((m: any) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            createdAt: m.createdAt,
-            aiName: m.aiName,
-            parts: [{ type: "text", text: m.content || "" }],
-          })));
-          // Extract latest aiName from assistant messages
-          const lastAssistant = [...data.messages].reverse().find((m: any) => m.role === "assistant" && m.aiName);
-          if (lastAssistant?.aiName) setAiName(lastAssistant.aiName);
-        }
-      })
-      .catch(() => {});
+    const timer = setTimeout(() => {
+      fetch(`/api/chat/history?storeId=${encodeURIComponent(storeId)}&limit=200`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.messages) {
+            setMessages(data.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              createdAt: m.createdAt,
+              aiName: m.aiName,
+              parts: [{ type: "text", text: m.content || "" }],
+            })));
+            const lastAssistant = [...data.messages].reverse().find((m: any) => m.role === "assistant" && m.aiName);
+            if (lastAssistant?.aiName) setAiName(lastAssistant.aiName);
+          }
+        })
+        .catch(() => {});
+    }, 100);
+    return () => clearTimeout(timer);
   }, [storeId]);
 
   // ── Load pending regex candidates ──
